@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:glass_kit/glass_kit.dart';
 import '../constants.dart';
-import 'contacts_screen.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
         });
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const ContactsScreen()),
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
       }
     });
