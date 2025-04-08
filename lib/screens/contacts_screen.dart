@@ -5,8 +5,6 @@ import '../widgets/contact_group_header.dart';
 import '../models/contact.dart';
 import 'chat_screen.dart';
 
-enum ContactStatus { online, away, offline }
-
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
 
@@ -226,6 +224,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 address: "",
                 isFavorite: false,
               ),
+              status: contact['status'] as ContactStatus,
               onTap: () => _navigateToChat(context, contact['name']),
             );
           },
@@ -252,6 +251,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   address: "",
                   isFavorite: groupName == 'Favorites',
                 ),
+                status: contact['status'] as ContactStatus,
                 onTap: () => _navigateToChat(context, contact['name']),
               ),
             ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
-import '../screens/contacts_screen.dart';
+import '../widgets/contact_item.dart';
 
 class ChatSummaryCard extends StatelessWidget {
   final String name;
