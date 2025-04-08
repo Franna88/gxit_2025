@@ -17,11 +17,23 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  // Animation controllers
   late AnimationController _pulseController;
   late AnimationController _rotateController;
   late AnimationController _floatController;
   late Animation<double> _pulseAnimation;
   late Animation<double> _floatAnimation;
+
+  // 3D rotation controllers and values
+  late AnimationController _rotationXController;
+  late AnimationController _rotationYController;
+  double _rotationX = 0.0;
+  double _rotationY = 0.0;
+  double _lastDragX = 0.0;
+  double _lastDragY = 0.0;
+  bool _isDragging = false;
+  static const double _maxRotation =
+      0.5; // Increased max rotation for more noticeable effect
 
   final List<Particle> _particles = [];
   final int particleCount = 20;
@@ -71,6 +83,30 @@ class _LoginScreenState extends State<LoginScreen>
       CurvedAnimation(parent: _floatController, curve: Curves.easeInOut),
     );
 
+    // 3D rotation controllers
+    _rotationXController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    _rotationYController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    // Add listeners to restore to center position
+    _rotationXController.addListener(() {
+      setState(() {
+        _rotationX = _rotationXController.value;
+      });
+    });
+
+    _rotationYController.addListener(() {
+      setState(() {
+        _rotationY = _rotationYController.value;
+      });
+    });
+
     // Start animation timer
     Future.delayed(Duration.zero, () {
       _startParticleAnimation();
@@ -105,6 +141,8 @@ class _LoginScreenState extends State<LoginScreen>
     _pulseController.dispose();
     _rotateController.dispose();
     _floatController.dispose();
+    _rotationXController.dispose();
+    _rotationYController.dispose();
     super.dispose();
   }
 
@@ -125,6 +163,73 @@ class _LoginScreenState extends State<LoginScreen>
         );
       }
     });
+  }
+
+  // Add new pan gesture handlers
+  void _onPanStart(DragStartDetails details) {
+    setState(() {
+      _isDragging = true;
+      _lastDragX = details.globalPosition.dx;
+      _lastDragY = details.globalPosition.dy;
+    });
+
+    // Stop any ongoing animations
+    _rotationXController.stop();
+    _rotationYController.stop();
+
+    // Optionally pause other animations
+    // _floatController.stop();
+    // _rotateController.stop();
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    if (!_isDragging) return;
+
+    final dx = details.globalPosition.dx - _lastDragX;
+    final dy = details.globalPosition.dy - _lastDragY;
+
+    // Higher sensitivity for more immediate response
+    const sensitivity = 0.5;
+
+    setState(() {
+      // Y rotation is affected by X movement (swipe left/right)
+      _rotationY += (dx / 100) * sensitivity;
+      _rotationY = _rotationY.clamp(-_maxRotation, _maxRotation);
+
+      // X rotation is affected by Y movement (swipe up/down)
+      _rotationX += (dy / 100) * sensitivity;
+      _rotationX = _rotationX.clamp(-_maxRotation, _maxRotation);
+
+      // Update last position
+      _lastDragX = details.globalPosition.dx;
+      _lastDragY = details.globalPosition.dy;
+    });
+  }
+
+  void _onPanEnd(DragEndDetails details) {
+    setState(() {
+      _isDragging = false;
+    });
+
+    // Animate back to center with spring effect
+    _rotationXController.value = _rotationX;
+    _rotationYController.value = _rotationY;
+
+    _rotationXController.animateTo(
+      0,
+      curve: Curves.elasticOut,
+      duration: const Duration(milliseconds: 1200),
+    );
+
+    _rotationYController.animateTo(
+      0,
+      curve: Curves.elasticOut,
+      duration: const Duration(milliseconds: 1200),
+    );
+
+    // Resume other animations if needed
+    // _floatController.repeat(reverse: true);
+    // _rotateController.repeat();
   }
 
   @override
@@ -166,92 +271,108 @@ class _LoginScreenState extends State<LoginScreen>
                     Expanded(
                       flex: 4,
                       child: Center(
-                        child: AnimatedBuilder(
-                          animation: Listenable.merge([
-                            _pulseController,
-                            _floatController,
-                            _rotateController,
-                          ]),
-                          builder: (context, child) {
-                            return Transform.translate(
-                              offset: Offset(0, _floatAnimation.value),
-                              child: Transform.rotate(
-                                angle:
-                                    _rotateController.value *
-                                    2 *
-                                    math.pi *
-                                    0.05,
-                                child: Transform.scale(
-                                  scale: _pulseAnimation.value,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      // Glow effect
-                                      Container(
-                                        width: size.width * 0.5,
-                                        height: size.width * 0.5,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: const Color(
-                                            0xFF0A0A18,
-                                          ).withOpacity(0.8),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: AppColors.primaryBlue
-                                                  .withOpacity(0.3),
-                                              blurRadius: 40,
-                                              spreadRadius: 20,
-                                            ),
-                                          ],
+                        child: GestureDetector(
+                          onPanStart: _onPanStart,
+                          onPanUpdate: _onPanUpdate,
+                          onPanEnd: _onPanEnd,
+                          child: AnimatedBuilder(
+                            animation: Listenable.merge([
+                              _pulseController,
+                              _floatController,
+                              _rotateController,
+                            ]),
+                            builder: (context, child) {
+                              return Transform.translate(
+                                offset: Offset(0, _floatAnimation.value),
+                                child: Transform(
+                                  transform:
+                                      Matrix4.identity()
+                                        ..setEntry(
+                                          3,
+                                          2,
+                                          0.001,
+                                        ) // Perspective effect
+                                        ..rotateX(_rotationX)
+                                        ..rotateY(_rotationY)
+                                        ..rotateZ(
+                                          _rotateController.value *
+                                              2 *
+                                              math.pi *
+                                              0.05,
                                         ),
-                                      ),
-
-                                      // Logo
-                                      Hero(
-                                        tag: 'logo',
-                                        child: Container(
-                                          width: size.width * 0.45,
-                                          height: size.width * 0.45,
+                                  alignment: Alignment.center,
+                                  child: Transform.scale(
+                                    scale: _pulseAnimation.value,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        // Glow effect
+                                        Container(
+                                          width: size.width * 0.5,
+                                          height: size.width * 0.5,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: const Color(0xFF0A0A18),
+                                            color: const Color(
+                                              0xFF0A0A18,
+                                            ).withOpacity(0.8),
                                             boxShadow: [
                                               BoxShadow(
                                                 color: AppColors.primaryBlue
-                                                    .withOpacity(0.2),
-                                                blurRadius: 15,
-                                                spreadRadius: 1,
+                                                    .withOpacity(0.3),
+                                                blurRadius: 40,
+                                                spreadRadius: 20,
                                               ),
                                             ],
                                           ),
-                                          child: ClipOval(
-                                            child: Image.asset(
-                                              'assets/images/gxit_logo.png',
-                                              fit: BoxFit.cover,
+                                        ),
+
+                                        // Logo
+                                        Hero(
+                                          tag: 'logo',
+                                          child: Container(
+                                            width: size.width * 0.45,
+                                            height: size.width * 0.45,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: const Color(0xFF0A0A18),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: AppColors.primaryBlue
+                                                      .withOpacity(0.2),
+                                                  blurRadius: 15,
+                                                  spreadRadius: 1,
+                                                ),
+                                              ],
+                                            ),
+                                            child: ClipOval(
+                                              child: Image.asset(
+                                                'assets/images/gxit_logo.png',
+                                                fit: BoxFit.cover,
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
 
-                                      // Circular neon ring
-                                      Container(
-                                        width: size.width * 0.55,
-                                        height: size.width * 0.55,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: AppColors.primaryBlue
-                                                .withOpacity(0.3),
-                                            width: 2,
+                                        // Circular neon ring
+                                        Container(
+                                          width: size.width * 0.55,
+                                          height: size.width * 0.55,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: AppColors.primaryBlue
+                                                  .withOpacity(0.3),
+                                              width: 2,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
