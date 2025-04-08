@@ -12,36 +12,61 @@ class ContactsScreen extends StatefulWidget {
   State<ContactsScreen> createState() => _ContactsScreenState();
 }
 
-class _ContactsScreenState extends State<ContactsScreen> {
+class _ContactsScreenState extends State<ContactsScreen>
+    with SingleTickerProviderStateMixin {
   // Filtered contacts list
   List<Map<String, dynamic>> _filteredContacts = [];
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
 
+  // Animation for status glow effects
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
   // Predefined contact groups
   final Map<String, List<Map<String, dynamic>>> _contactGroups = {
     'Favorites': [
-      {'name': 'JoeBanker', 'status': ContactStatus.online},
+      {
+        'name': 'JoeBanker',
+        'status': ContactStatus.online,
+        'messageType': 'Urgent',
+      },
       {'name': 'TradePost', 'status': ContactStatus.online},
     ],
     'Trading': [
-      {'name': 'Alex Trader', 'status': ContactStatus.online},
+      {
+        'name': 'Alex Trader',
+        'status': ContactStatus.online,
+        'messageType': 'New Message',
+      },
       {'name': 'Sam Markets', 'status': ContactStatus.away},
-      {'name': 'Jamie Forex', 'status': ContactStatus.offline},
+      {
+        'name': 'Jamie Forex',
+        'status': ContactStatus.offline,
+        'messageType': 'Question',
+      },
     ],
     'Analysts': [
       {'name': 'Rachel Finance', 'status': ContactStatus.online},
       {'name': 'Mike Analyst', 'status': ContactStatus.offline},
     ],
     'Team': [
-      {'name': 'Lisa Manager', 'status': ContactStatus.online},
+      {
+        'name': 'Lisa Manager',
+        'status': ContactStatus.online,
+        'messageType': 'Follow-up',
+      },
       {'name': 'John Dev', 'status': ContactStatus.away},
       {'name': 'Sarah Design', 'status': ContactStatus.offline},
     ],
     'Other': [
       {'name': 'Info', 'status': ContactStatus.online},
       {'name': 'Gallery', 'status': ContactStatus.online},
-      {'name': 'Support', 'status': ContactStatus.online},
+      {
+        'name': 'Support',
+        'status': ContactStatus.online,
+        'messageType': 'Urgent',
+      },
     ],
   };
 
@@ -56,12 +81,23 @@ class _ContactsScreenState extends State<ContactsScreen> {
       _allContacts.addAll(group);
     }
     _searchController.addListener(_onSearchChanged);
+
+    // Initialize pulse animation for status indicators
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 0.7, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -217,6 +253,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
           itemCount: _filteredContacts.length,
           itemBuilder: (context, index) {
             final contact = _filteredContacts[index];
+            final messageType = contact['messageType'] as String?;
             return ContactItem(
               contact: Contact(
                 id: index.toString(),
@@ -225,6 +262,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 isFavorite: false,
               ),
               status: contact['status'] as ContactStatus,
+              messageType: messageType,
               onTap: () => _navigateToChat(context, contact['name']),
             );
           },
@@ -232,31 +270,42 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Widget _buildGroupedContacts() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      itemCount: _contactGroups.length,
-      itemBuilder: (context, index) {
-        final groupName = _contactGroups.keys.elementAt(index);
-        final contactsInGroup = _contactGroups[groupName]!;
+    return AnimatedBuilder(
+      animation: _pulseAnimation,
+      builder: (context, child) {
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          itemCount: _contactGroups.length,
+          itemBuilder: (context, index) {
+            final groupName = _contactGroups.keys.elementAt(index);
+            final contactsInGroup = _contactGroups[groupName]!;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ContactGroupHeader(title: groupName, count: contactsInGroup.length),
-            ...contactsInGroup.map(
-              (contact) => ContactItem(
-                contact: Contact(
-                  id: contact['name'],
-                  name: contact['name'],
-                  address: "",
-                  isFavorite: groupName == 'Favorites',
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ContactGroupHeader(
+                  title: groupName,
+                  count: contactsInGroup.length,
                 ),
-                status: contact['status'] as ContactStatus,
-                onTap: () => _navigateToChat(context, contact['name']),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
+                ...contactsInGroup.map((contact) {
+                  final isOnline = contact['status'] == ContactStatus.online;
+                  final messageType = contact['messageType'] as String?;
+                  return ContactItem(
+                    contact: Contact(
+                      id: contact['name'],
+                      name: contact['name'],
+                      address: "",
+                      isFavorite: groupName == 'Favorites',
+                    ),
+                    status: contact['status'] as ContactStatus,
+                    messageType: messageType,
+                    onTap: () => _navigateToChat(context, contact['name']),
+                  );
+                }),
+                const SizedBox(height: 16),
+              ],
+            );
+          },
         );
       },
     );
