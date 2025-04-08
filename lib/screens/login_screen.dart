@@ -192,6 +192,9 @@ class _LoginScreenState extends State<LoginScreen>
                                         height: size.width * 0.5,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
+                                          color: const Color(
+                                            0xFF0A0A18,
+                                          ).withOpacity(0.8),
                                           boxShadow: [
                                             BoxShadow(
                                               color: AppColors.primaryBlue
@@ -206,9 +209,27 @@ class _LoginScreenState extends State<LoginScreen>
                                       // Logo
                                       Hero(
                                         tag: 'logo',
-                                        child: Image.asset(
-                                          'assets/images/gxit_logo.png',
-                                          width: size.width * 0.5,
+                                        child: Container(
+                                          width: size.width * 0.45,
+                                          height: size.width * 0.45,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: const Color(0xFF0A0A18),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: AppColors.primaryBlue
+                                                    .withOpacity(0.2),
+                                                blurRadius: 15,
+                                                spreadRadius: 1,
+                                              ),
+                                            ],
+                                          ),
+                                          child: ClipOval(
+                                            child: Image.asset(
+                                              'assets/images/gxit_logo.png',
+                                              fit: BoxFit.cover,
+                                            ),
+                                          ),
                                         ),
                                       ),
 
