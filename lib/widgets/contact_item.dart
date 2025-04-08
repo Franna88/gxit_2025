@@ -1,121 +1,109 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
-
-enum ContactStatus { online, away, offline, unknown }
+import '../models/contact.dart';
 
 class ContactItem extends StatelessWidget {
-  final String name;
-  final ContactStatus status;
-  final bool hasUnreadMessage;
+  final Contact contact;
   final VoidCallback onTap;
 
-  const ContactItem({
-    super.key,
-    required this.name,
-    required this.status,
-    this.hasUnreadMessage = false,
-    required this.onTap,
-  });
+  const ContactItem({super.key, required this.contact, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isDarkMode ? AppColors.glassDark : AppColors.glassLight,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+        child: Row(
+          children: [
+            // Avatar or profile image
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
                 color:
-                    isDarkMode
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.black.withOpacity(0.05),
-                width: 0.5,
+                    contact.avatarColor ??
+                    AppColors.primaryBlue.withOpacity(0.2),
+                shape: BoxShape.circle,
               ),
+              child:
+                  contact.avatarUrl != null && contact.avatarUrl!.isNotEmpty
+                      ? ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: Image.network(
+                          contact.avatarUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (context, error, stackTrace) => Center(
+                                child: Text(
+                                  contact.name.isNotEmpty
+                                      ? contact.name[0].toUpperCase()
+                                      : '?',
+                                  style: TextStyle(
+                                    color:
+                                        isDarkMode
+                                            ? AppColors.primaryBlue
+                                            : AppColors.darkText,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ),
+                        ),
+                      )
+                      : Center(
+                        child: Text(
+                          contact.name.isNotEmpty
+                              ? contact.name[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                            color:
+                                isDarkMode
+                                    ? AppColors.primaryBlue
+                                    : AppColors.darkText,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
             ),
-            child: Row(
-              children: [
-                // Status indicator
-                _buildStatusIndicator(),
-                const SizedBox(width: 12),
-
-                // Contact name
-                Expanded(
-                  child: Text(
-                    name,
+            const SizedBox(width: 16),
+            // Contact information
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    contact.name,
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight:
-                          hasUnreadMessage
-                              ? FontWeight.bold
-                              : FontWeight.normal,
+                      fontWeight: FontWeight.w500,
                       color: isDarkMode ? Colors.white : AppColors.darkText,
                     ),
                   ),
-                ),
-
-                // Message indicator if there's an unread message
-                if (hasUnreadMessage)
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.amber,
+                  const SizedBox(height: 4),
+                  Text(
+                    contact.address,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color:
+                          isDarkMode
+                              ? AppColors.subtleText
+                              : Colors.grey.shade600,
                     ),
-                    child: const Icon(
-                      Icons.mail_outline,
-                      size: 16,
-                      color: Colors.white,
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-              ],
+                ],
+              ),
             ),
-          ),
+            // Favorite icon if applicable
+            if (contact.isFavorite)
+              Icon(Icons.star, color: AppColors.primaryYellow, size: 20),
+          ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatusIndicator() {
-    Color statusColor;
-
-    switch (status) {
-      case ContactStatus.online:
-        statusColor = AppColors.onlineGreen;
-        break;
-      case ContactStatus.away:
-        statusColor = AppColors.awayYellow;
-        break;
-      case ContactStatus.offline:
-        statusColor = AppColors.offlineRed;
-        break;
-      case ContactStatus.unknown:
-        statusColor = Colors.grey;
-        break;
-    }
-
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: statusColor,
-        boxShadow: [
-          BoxShadow(
-            color: statusColor.withOpacity(0.5),
-            blurRadius: 4,
-            spreadRadius: 1,
-          ),
-        ],
       ),
     );
   }

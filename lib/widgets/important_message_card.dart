@@ -26,15 +26,21 @@ class ImportantMessageCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: isDarkMode ? AppColors.glassDark : AppColors.glassLight,
+          color:
+              isDarkMode
+                  ? AppColors.darkSecondaryBackground
+                  : AppColors.glassLight,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: AppColors.primaryOrange.withOpacity(0.5),
-            width: 1.5,
+            color:
+                isDarkMode
+                    ? AppColors.primaryOrange.withOpacity(0.3)
+                    : AppColors.primaryOrange.withOpacity(0.5),
+            width: isDarkMode ? 1 : 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.05),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -70,7 +76,7 @@ class ImportantMessageCard extends StatelessWidget {
                     timeFormat.format(timestamp),
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                      color: isDarkMode ? AppColors.subtleText : Colors.black54,
                     ),
                   ),
                 ],
@@ -128,13 +134,15 @@ class ImportantMessageCard extends StatelessWidget {
     Color color,
     VoidCallback onPressed,
   ) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return InkWell(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: isDarkMode ? color.withOpacity(0.15) : color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
-import '../widgets/contact_item.dart';
+import '../screens/contacts_screen.dart';
 
 class ChatSummaryCard extends StatelessWidget {
   final String name;
@@ -29,21 +29,24 @@ class ChatSummaryCard extends StatelessWidget {
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
           gradient:
-              status == ContactStatus.online
+              isDarkMode && status == ContactStatus.online
                   ? LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      AppColors.primaryBlue.withOpacity(0.2),
-                      AppColors.primaryPurple.withOpacity(0.2),
+                      AppColors.primaryBlue.withOpacity(0.1),
+                      AppColors.darkSecondaryBackground,
                     ],
                   )
                   : null,
-          color: isDarkMode ? AppColors.glassDark : AppColors.glassLight,
+          color:
+              isDarkMode
+                  ? AppColors.darkSecondaryBackground
+                  : AppColors.glassLight,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.05),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -59,7 +62,9 @@ class ChatSummaryCard extends StatelessWidget {
                 // Avatar
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor: _getAvatarColor(),
+                  backgroundColor: _getAvatarColor().withOpacity(
+                    isDarkMode ? 0.7 : 1.0,
+                  ),
                   child: Text(
                     name.substring(0, 1).toUpperCase(),
                     style: const TextStyle(
@@ -84,7 +89,7 @@ class ChatSummaryCard extends StatelessWidget {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: _getStatusColor().withOpacity(0.5),
+                        color: _getStatusColor().withOpacity(0.4),
                         blurRadius: 4,
                         spreadRadius: 1,
                       ),
@@ -115,7 +120,7 @@ class ChatSummaryCard extends StatelessWidget {
                 lastMessage,
                 style: TextStyle(
                   fontSize: 12,
-                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                  color: isDarkMode ? AppColors.subtleText : Colors.black54,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -128,7 +133,10 @@ class ChatSummaryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryPurple,
+                  color:
+                      isDarkMode
+                          ? AppColors.primaryBlue
+                          : AppColors.primaryPurple,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -148,10 +156,16 @@ class ChatSummaryCard extends StatelessWidget {
   }
 
   Color _getAvatarColor() {
-    if (name == 'JoeBanker') return AppColors.primaryBlue;
-    if (name == 'TradePost') return AppColors.primaryOrange;
-    if (name == 'Info') return AppColors.primaryGreen;
-    if (name == 'Gallery') return AppColors.primaryPurple;
+    // Social app usernames
+    if (name == 'Alex' || name == 'Jessica') return AppColors.primaryBlue;
+    if (name == 'SocialBuzz' || name == 'PartyPeople')
+      return AppColors.primaryOrange;
+    if (name == 'GamingCrew' || name == 'Michael')
+      return AppColors.primaryGreen;
+    if (name == 'TravelGroup' || name == 'Emma') return AppColors.primaryPurple;
+    if (name == 'FitnessFam' || name == 'Carlos')
+      return AppColors.primaryYellow;
+    // Default color for other users
     return AppColors.primaryBlue;
   }
 
@@ -163,7 +177,7 @@ class ChatSummaryCard extends StatelessWidget {
         return AppColors.awayYellow;
       case ContactStatus.offline:
         return AppColors.offlineRed;
-      case ContactStatus.unknown:
+      default:
         return Colors.grey;
     }
   }

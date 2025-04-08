@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
-import 'package:glass_kit/glass_kit.dart';
+import 'dart:math' as math;
 import '../constants.dart';
 import 'home_screen.dart';
 
@@ -11,16 +10,101 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with TickerProviderStateMixin {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  late AnimationController _pulseController;
+  late AnimationController _rotateController;
+  late AnimationController _floatController;
+  late Animation<double> _pulseAnimation;
+  late Animation<double> _floatAnimation;
+
+  final List<Particle> _particles = [];
+  final int particleCount = 20;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Generate particles
+    final random = math.Random();
+    for (int i = 0; i < particleCount; i++) {
+      _particles.add(
+        Particle(
+          x: random.nextDouble(),
+          y: random.nextDouble(),
+          size: random.nextDouble() * 10 + 2,
+          speedX: (random.nextDouble() - 0.5) * 0.01,
+          speedY: (random.nextDouble() - 0.5) * 0.01,
+          opacity: random.nextDouble() * 0.7 + 0.3,
+        ),
+      );
+    }
+
+    // Logo pulse animation
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 0.97, end: 1.03).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    // Logo rotation animation
+    _rotateController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 20000),
+    )..repeat();
+
+    // Logo floating animation
+    _floatController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    )..repeat(reverse: true);
+
+    _floatAnimation = Tween<double>(begin: -10.0, end: 10.0).animate(
+      CurvedAnimation(parent: _floatController, curve: Curves.easeInOut),
+    );
+
+    // Start animation timer
+    Future.delayed(Duration.zero, () {
+      _startParticleAnimation();
+    });
+  }
+
+  void _startParticleAnimation() {
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (mounted) {
+        setState(() {
+          // Move particles
+          for (final particle in _particles) {
+            particle.x += particle.speedX;
+            particle.y += particle.speedY;
+
+            // Wrap around edges
+            if (particle.x < 0) particle.x = 1.0;
+            if (particle.x > 1) particle.x = 0.0;
+            if (particle.y < 0) particle.y = 1.0;
+            if (particle.y > 1) particle.y = 0.0;
+          }
+        });
+        _startParticleAnimation();
+      }
+    });
+  }
+
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _pulseController.dispose();
+    _rotateController.dispose();
+    _floatController.dispose();
     super.dispose();
   }
 
@@ -46,7 +130,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: Container(
@@ -54,245 +137,424 @@ class _LoginScreenState extends State<LoginScreen> {
         height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
             colors: [
-              isDarkMode
-                  ? AppColors.darkBackground
-                  : AppColors.primaryBlue.withOpacity(0.7),
-              isDarkMode
-                  ? AppColors.darkBackground.withOpacity(0.8)
-                  : AppColors.primaryPurple.withOpacity(0.5),
+              const Color(0xFF0F0F1A),
+              AppColors.primaryPurple.withOpacity(0.8),
+              const Color(0xFF0A0A18),
             ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight:
-                      size.height -
-                      MediaQuery.of(context).padding.top -
-                      MediaQuery.of(context).padding.bottom,
-                ),
+        child: Stack(
+          children: [
+            // Particle effect background
+            ..._particles.map((particle) => _buildParticle(particle, size)),
+
+            // Neon grid lines
+            Positioned.fill(child: CustomPaint(painter: GridPainter())),
+
+            // Main content
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 40),
-                    // Logo
-                    Image.asset(
-                      'assets/images/gxit_logo.png',
-                      width: 150,
-                      height: 150,
-                    ),
-                    const SizedBox(height: 20),
-                    // App name
-                    Text(
-                      'GXIT Chat',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        foreground:
-                            Paint()
-                              ..shader = const LinearGradient(
-                                colors: [
-                                  AppColors.primaryBlue,
-                                  AppColors.primaryPurple,
-                                  AppColors.primaryOrange,
-                                ],
-                              ).createShader(
-                                const Rect.fromLTWH(0.0, 0.0, 200.0, 70.0),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 50),
-                    // Glass container for login form
-                    Container(
-                      height: 330,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: BackdropFilter(
-                          filter:
-                              isDarkMode
-                                  ? ImageFilter.blur(sigmaX: 10, sigmaY: 10)
-                                  : ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color:
-                                  isDarkMode
-                                      ? Colors.white.withOpacity(0.05)
-                                      : Colors.white.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.1),
-                                width: 1.5,
-                              ),
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  isDarkMode
-                                      ? Colors.white.withOpacity(0.05)
-                                      : Colors.white.withOpacity(0.6),
-                                  isDarkMode
-                                      ? Colors.white.withOpacity(0.02)
-                                      : Colors.white.withOpacity(0.3),
-                                ],
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                children: [
-                                  TextField(
-                                    controller: _usernameController,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Username',
-                                      prefixIcon: Icon(Icons.person_outline),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  TextField(
-                                    controller: _passwordController,
-                                    obscureText: _obscurePassword,
-                                    decoration: InputDecoration(
-                                      labelText: 'Password',
-                                      prefixIcon: const Icon(
-                                        Icons.lock_outline,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(
-                                          _obscurePassword
-                                              ? Icons.visibility_off
-                                              : Icons.visibility,
-                                        ),
-                                        onPressed: () {
-                                          setState(() {
-                                            _obscurePassword =
-                                                !_obscurePassword;
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      onPressed: () {},
-                                      child: const Text('Forgot Password?'),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton(
-                                      onPressed: _isLoading ? null : _login,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.transparent,
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 14,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            30,
-                                          ),
-                                        ),
-                                      ).copyWith(
-                                        backgroundColor:
-                                            MaterialStateProperty.all(
-                                              Colors.transparent,
-                                            ),
-                                        overlayColor: MaterialStateProperty.all(
-                                          Colors.white.withOpacity(0.1),
-                                        ),
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 6,
-                                        ),
+                    // Floating and pulsing logo
+                    Expanded(
+                      flex: 4,
+                      child: Center(
+                        child: AnimatedBuilder(
+                          animation: Listenable.merge([
+                            _pulseController,
+                            _floatController,
+                            _rotateController,
+                          ]),
+                          builder: (context, child) {
+                            return Transform.translate(
+                              offset: Offset(0, _floatAnimation.value),
+                              child: Transform.rotate(
+                                angle:
+                                    _rotateController.value *
+                                    2 *
+                                    math.pi *
+                                    0.05,
+                                child: Transform.scale(
+                                  scale: _pulseAnimation.value,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      // Glow effect
+                                      Container(
+                                        width: size.width * 0.5,
+                                        height: size.width * 0.5,
                                         decoration: BoxDecoration(
-                                          gradient:
-                                              GradientPalette.buttonGradient,
-                                          borderRadius: BorderRadius.circular(
-                                            30,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppColors.primaryBlue
+                                                  .withOpacity(0.3),
+                                              blurRadius: 40,
+                                              spreadRadius: 20,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      // Logo
+                                      Hero(
+                                        tag: 'logo',
+                                        child: Image.asset(
+                                          'assets/images/gxit_logo.png',
+                                          width: size.width * 0.5,
+                                        ),
+                                      ),
+
+                                      // Circular neon ring
+                                      Container(
+                                        width: size.width * 0.55,
+                                        height: size.width * 0.55,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: AppColors.primaryBlue
+                                                .withOpacity(0.3),
+                                            width: 2,
                                           ),
                                         ),
-                                        child:
-                                            _isLoading
-                                                ? const SizedBox(
-                                                  width: 24,
-                                                  height: 24,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        color: Colors.white,
-                                                        strokeWidth: 3,
-                                                      ),
-                                                )
-                                                : const Text(
-                                                  'LOGIN',
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.bold,
-                                                    letterSpacing: 1.2,
-                                                  ),
-                                                ),
                                       ),
-                                    ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                       ),
                     ),
-                    const SizedBox(height: 30),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Don\'t have an account? ',
-                          style: TextStyle(
-                            color: isDarkMode ? Colors.white70 : Colors.black87,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          child: Text(
-                            'Sign Up',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primaryPurple,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
+
+                    // Login form
+                    Expanded(flex: 6, child: _buildLoginForm()),
                   ],
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _buildLoginForm() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: AppColors.primaryBlue.withOpacity(0.3),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withOpacity(0.1),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Form title with cyber-styled text
+          Text(
+            "LOGIN",
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              color: Colors.white.withOpacity(0.9),
+              letterSpacing: 2,
+              shadows: [
+                Shadow(
+                  color: AppColors.primaryBlue.withOpacity(0.8),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 6),
+          Text(
+            "ACCESS YOUR NETWORK",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppColors.subtleText,
+              letterSpacing: 1.5,
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Username field
+          _buildCyberTextField(
+            controller: _usernameController,
+            label: 'IDENTITY',
+            prefixIcon: Icons.person_outline,
+          ),
+
+          const SizedBox(height: 16),
+
+          // Password field
+          _buildCyberTextField(
+            controller: _passwordController,
+            label: 'PASSCODE',
+            isPassword: true,
+            prefixIcon: Icons.lock_outline,
+          ),
+
+          const SizedBox(height: 12),
+
+          // Forgot password link
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {},
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue,
+                padding: EdgeInsets.zero,
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1,
+                ),
+              ),
+              child: const Text('RESET PASSCODE'),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Login button with neon effect
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _login,
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                backgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Ink(
+                decoration: BoxDecoration(
+                  gradient:
+                      _isLoading
+                          ? null
+                          : LinearGradient(
+                            colors: [
+                              AppColors.primaryBlue.withOpacity(0.8),
+                              AppColors.primaryPurple.withOpacity(0.8),
+                            ],
+                          ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow:
+                      _isLoading
+                          ? null
+                          : [
+                            BoxShadow(
+                              color: AppColors.primaryBlue.withOpacity(0.4),
+                              blurRadius: 8,
+                              spreadRadius: 0,
+                            ),
+                          ],
+                ),
+                child: Container(
+                  alignment: Alignment.center,
+                  child:
+                      _isLoading
+                          ? SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: AppColors.primaryBlue,
+                              strokeWidth: 3,
+                            ),
+                          )
+                          : const Text(
+                            'CONNECT',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Sign up text
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'NEW USER? ',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.subtleText,
+                  letterSpacing: 1,
+                ),
+              ),
+              TextButton(
+                onPressed: () {},
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.zero,
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                child: const Text('REGISTER'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCyberTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData prefixIcon,
+    bool isPassword = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.primaryBlue.withOpacity(0.4),
+          width: 1.5,
+        ),
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: isPassword ? _obscurePassword : false,
+        style: const TextStyle(color: Colors.white, letterSpacing: 1),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+            color: AppColors.subtleText,
+            fontSize: 12,
+            letterSpacing: 1.5,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: Icon(prefixIcon, color: AppColors.subtleText, size: 20),
+          suffixIcon:
+              isPassword
+                  ? IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                      color: AppColors.subtleText,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                  )
+                  : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildParticle(Particle particle, Size size) {
+    return Positioned(
+      left: particle.x * size.width,
+      top: particle.y * size.height,
+      child: Container(
+        width: particle.size,
+        height: particle.size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withOpacity(particle.opacity * 0.4),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withOpacity(particle.opacity * 0.3),
+              blurRadius: 5,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Data class for particles
+class Particle {
+  double x;
+  double y;
+  final double size;
+  final double speedX;
+  final double speedY;
+  final double opacity;
+
+  Particle({
+    required this.x,
+    required this.y,
+    required this.size,
+    required this.speedX,
+    required this.speedY,
+    required this.opacity,
+  });
+}
+
+// Custom painter for grid effect
+class GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = Colors.blue.withOpacity(0.1)
+          ..strokeWidth = 0.5;
+
+    // Horizontal lines
+    final horizontalCount = 15;
+    final horizontalSpacing = size.height / horizontalCount;
+    for (int i = 0; i <= horizontalCount; i++) {
+      final y = i * horizontalSpacing;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+
+    // Vertical lines
+    final verticalCount = 15;
+    final verticalSpacing = size.width / verticalCount;
+    for (int i = 0; i <= verticalCount; i++) {
+      final x = i * verticalSpacing;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

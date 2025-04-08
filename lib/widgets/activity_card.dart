@@ -24,11 +24,14 @@ class ActivityCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isDarkMode ? AppColors.glassDark : AppColors.glassLight,
+        color:
+            isDarkMode
+                ? AppColors.darkSecondaryBackground
+                : AppColors.glassLight,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -44,7 +47,10 @@ class ActivityCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _getActivityColor().withOpacity(0.2),
+                color:
+                    isDarkMode
+                        ? _getActivityColor().withOpacity(0.15)
+                        : _getActivityColor().withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -84,7 +90,10 @@ class ActivityCard extends StatelessWidget {
                         '· ${_getRelativeTimeText(timestamp)}',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDarkMode ? Colors.white60 : Colors.black54,
+                          color:
+                              isDarkMode
+                                  ? AppColors.subtleText
+                                  : Colors.black54,
                         ),
                       ),
                     ],

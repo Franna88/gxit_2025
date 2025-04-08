@@ -4,6 +4,7 @@ import '../widgets/chat_summary_card.dart';
 import '../widgets/important_message_card.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/contact_item.dart';
+import '../widgets/chat_room_card.dart';
 import 'contacts_screen.dart';
 import 'chat_screen.dart';
 
@@ -38,18 +39,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
+          gradient:
               isDarkMode
-                  ? AppColors.darkBackground
-                  : AppColors.primaryBlue.withOpacity(0.7),
-              isDarkMode
-                  ? AppColors.darkBackground.withOpacity(0.9)
-                  : Colors.white,
-            ],
-          ),
+                  ? GradientPalette.darkGradient
+                  : LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [AppColors.lightBackground, Colors.white],
+                  ),
         ),
         child: SafeArea(
           child: CustomScrollView(
@@ -57,7 +54,8 @@ class _HomeScreenState extends State<HomeScreen> {
               // App Bar
               SliverAppBar(
                 floating: true,
-                backgroundColor: Colors.transparent,
+                backgroundColor:
+                    isDarkMode ? Colors.transparent : AppColors.lightBackground,
                 elevation: 0,
                 title: Row(
                   children: [
@@ -65,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       backgroundColor: AppColors.primaryPurple,
                       radius: 20,
                       child: const Text(
-                        'GX',
+                        'SB',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -73,29 +71,27 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    ShaderMask(
-                      shaderCallback:
-                          (bounds) =>
-                              GradientPalette.gxitGradient.createShader(bounds),
-                      child: Text(
-                        'GXIT Chat',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                    Text(
+                      'Social Buzz',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white : AppColors.darkText,
                       ),
                     ),
                   ],
                 ),
                 actions: [
                   IconButton(
-                    icon: const Icon(Icons.search, color: Colors.white),
+                    icon: Icon(
+                      Icons.search,
+                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                    ),
                     onPressed: () {},
                   ),
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.notifications_none,
-                      color: Colors.white,
+                      color: isDarkMode ? Colors.white70 : Colors.black54,
                     ),
                     onPressed: () {},
                   ),
@@ -116,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Recent Chats Section
+              // Chat Rooms Section (previously Recent Chats)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -124,12 +120,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Recent Chats',
+                        'Chat Rooms',
                         style: Theme.of(
                           context,
                         ).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: isDarkMode ? Colors.white70 : Colors.black87,
+                          color:
+                              isDarkMode
+                                  ? AppColors.subtleText
+                                  : Colors.black87,
                         ),
                       ),
                       TextButton(
@@ -154,7 +153,108 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Recent Chats List
+              // Chat Rooms List (updated to show topic-oriented chats)
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 160,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      ChatRoomCard(
+                        name: 'Photography Lovers',
+                        lastMessage: 'Emma: Check out my new portrait shots!',
+                        lastActivity: DateTime.now().subtract(
+                          const Duration(minutes: 5),
+                        ),
+                        memberCount: 126,
+                        hasUnreadMessages: true,
+                        unreadCount: 3,
+                        onTap:
+                            () =>
+                                _navigateToChat(context, 'Photography Lovers'),
+                      ),
+                      ChatRoomCard(
+                        name: 'Music Festival',
+                        lastMessage:
+                            "Alex: Who's going to Coachella this year?",
+                        lastActivity: DateTime.now().subtract(
+                          const Duration(hours: 1),
+                        ),
+                        memberCount: 84,
+                        hasUnreadMessages: true,
+                        unreadCount: 5,
+                        onTap: () => _navigateToChat(context, 'Music Festival'),
+                      ),
+                      ChatRoomCard(
+                        name: 'Travel Adventures',
+                        lastMessage:
+                            'Rachel: Just booked my flight to Thailand!',
+                        lastActivity: DateTime.now().subtract(
+                          const Duration(hours: 6),
+                        ),
+                        memberCount: 53,
+                        hasUnreadMessages: false,
+                        onTap:
+                            () => _navigateToChat(context, 'Travel Adventures'),
+                      ),
+                      ChatRoomCard(
+                        name: 'Gaming Squad',
+                        lastMessage: 'Michael: Anyone up for Fortnite tonight?',
+                        lastActivity: DateTime.now().subtract(
+                          const Duration(days: 1),
+                        ),
+                        memberCount: 98,
+                        hasUnreadMessages: false,
+                        onTap: () => _navigateToChat(context, 'Gaming Squad'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Recent Contacts Section
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Recent Chats',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color:
+                              isDarkMode
+                                  ? AppColors.subtleText
+                                  : Colors.black87,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ContactsScreen(),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'View All',
+                          style: TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Recent Contacts List
               SliverToBoxAdapter(
                 child: SizedBox(
                   height: 140,
@@ -163,32 +263,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: [
                       ChatSummaryCard(
-                        name: 'JoeBanker',
-                        lastMessage: 'Hey, check this out!',
+                        name: 'Alex',
+                        lastMessage: 'Hey, are you free tonight?',
                         unreadCount: 3,
                         status: ContactStatus.online,
-                        onTap: () => _navigateToChat(context, 'JoeBanker'),
+                        onTap: () => _navigateToChat(context, 'Alex'),
                       ),
                       ChatSummaryCard(
-                        name: 'TradePost',
-                        lastMessage: 'New trade opportunity',
+                        name: 'Emma',
+                        lastMessage: 'Check out this photo!',
                         unreadCount: 1,
                         status: ContactStatus.online,
-                        onTap: () => _navigateToChat(context, 'TradePost'),
+                        onTap: () => _navigateToChat(context, 'Emma'),
                       ),
                       ChatSummaryCard(
-                        name: 'Info',
-                        lastMessage: 'System update completed',
+                        name: 'Michael',
+                        lastMessage: 'Game night tomorrow?',
                         unreadCount: 2,
-                        status: ContactStatus.online,
-                        onTap: () => _navigateToChat(context, 'Info'),
+                        status: ContactStatus.away,
+                        onTap: () => _navigateToChat(context, 'Michael'),
                       ),
                       ChatSummaryCard(
-                        name: 'Gallery',
-                        lastMessage: 'Check out these photos',
+                        name: 'Jessica',
+                        lastMessage: 'Thanks for the birthday wishes!',
                         unreadCount: 0,
-                        status: ContactStatus.online,
-                        onTap: () => _navigateToChat(context, 'Gallery'),
+                        status: ContactStatus.offline,
+                        onTap: () => _navigateToChat(context, 'Jessica'),
                       ),
                     ],
                   ),
@@ -208,7 +308,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           context,
                         ).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: isDarkMode ? Colors.white70 : Colors.black87,
+                          color:
+                              isDarkMode
+                                  ? AppColors.subtleText
+                                  : Colors.black87,
                         ),
                       ),
                       TextButton(
@@ -233,22 +336,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     children: [
                       ImportantMessageCard(
-                        senderName: 'TradePost',
+                        senderName: 'SocialBuzz',
                         message:
-                            'Your trade proposal has been accepted! Please confirm details by EOD.',
+                            'Party at Emma\'s place this Friday! RSVP by tomorrow evening.',
                         timestamp: DateTime.now().subtract(
                           const Duration(hours: 2),
                         ),
-                        onTap: () => _navigateToChat(context, 'TradePost'),
+                        onTap: () => _navigateToChat(context, 'SocialBuzz'),
                       ),
                       ImportantMessageCard(
-                        senderName: 'JoeBanker',
+                        senderName: 'TravelGroup',
                         message:
-                            'URGENT: Meeting rescheduled to tomorrow at 10am. Please confirm your availability.',
+                            'REMINDER: Group trip planning meeting tomorrow at 7pm via video call. Please bring destination ideas!',
                         timestamp: DateTime.now().subtract(
                           const Duration(hours: 5),
                         ),
-                        onTap: () => _navigateToChat(context, 'JoeBanker'),
+                        onTap: () => _navigateToChat(context, 'TravelGroup'),
                       ),
                     ],
                   ),
@@ -268,7 +371,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           context,
                         ).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: isDarkMode ? Colors.white70 : Colors.black87,
+                          color:
+                              isDarkMode
+                                  ? AppColors.subtleText
+                                  : Colors.black87,
                         ),
                       ),
                       TextButton(
@@ -295,57 +401,65 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         ActivityCard(
                           activityType: ActivityType.newMember,
-                          message: 'TradeGroup added 3 new members',
+                          message:
+                              'Carlos and 3 others joined Photography Lovers',
                           timestamp: DateTime.now().subtract(
                             const Duration(hours: 1),
                           ),
                         ),
                         ActivityCard(
                           activityType: ActivityType.fileShared,
-                          message: 'Gallery shared 5 photos with you',
+                          message:
+                              'Emma shared vacation photos in Travel Adventures',
                           timestamp: DateTime.now().subtract(
                             const Duration(hours: 3),
                           ),
                         ),
                         ActivityCard(
                           activityType: ActivityType.groupCreated,
-                          message: 'You created a new group "GXIT Team"',
+                          message: 'Michael created a new group "Movie Night"',
                           timestamp: DateTime.now().subtract(
-                            const Duration(days: 1),
+                            const Duration(hours: 5),
                           ),
                         ),
+                        const SizedBox(height: 24),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 80),
                 ]),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white,
-        selectedItemColor: AppColors.primaryBlue,
-        unselectedItemColor: isDarkMode ? Colors.white60 : Colors.grey.shade600,
-        currentIndex: _currentIndex,
-        onTap: _onTabTapped,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            label: 'Chats',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people_outline),
-            label: 'Contacts',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            label: 'Settings',
-          ),
-        ],
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(
+          canvasColor:
+              isDarkMode ? AppColors.darkSecondaryBackground : Colors.white,
+        ),
+        child: BottomNavigationBar(
+          selectedItemColor: AppColors.primaryBlue,
+          unselectedItemColor:
+              isDarkMode ? AppColors.subtleText : Colors.grey.shade600,
+          currentIndex: _currentIndex,
+          onTap: _onTabTapped,
+          type: BottomNavigationBarType.fixed,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.chat_bubble_outline),
+              label: 'Chats',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.people_outline),
+              label: 'Contacts',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_outlined),
+              label: 'Settings',
+            ),
+          ],
+        ),
       ),
     );
   }
