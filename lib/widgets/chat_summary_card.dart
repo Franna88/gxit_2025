@@ -63,35 +63,50 @@ class ChatSummaryCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 28,
                   backgroundColor: _getAvatarColor().withOpacity(
-                    isDarkMode ? 0.7 : 1.0,
+                    isDarkMode ? 0.5 : 0.8,
                   ),
-                  child: Text(
-                    name.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                    ),
-                  ),
-                ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Pulsing glow effect for online status
+                      if (status == ContactStatus.online)
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: _getStatusColor().withOpacity(0.6),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                        ),
 
-                // Status indicator
-                Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color:
-                          isDarkMode ? AppColors.darkBackground : Colors.white,
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _getStatusColor().withOpacity(0.4),
-                        blurRadius: 4,
-                        spreadRadius: 1,
+                      // Large status indicator
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color:
+                                isDarkMode
+                                    ? AppColors.darkBackground
+                                    : Colors.white,
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _getStatusColor().withOpacity(0.5),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),

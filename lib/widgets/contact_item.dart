@@ -26,83 +26,30 @@ class ContactItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
         child: Row(
           children: [
-            // Avatar or profile image with status indicator
-            Stack(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color:
-                        contact.avatarColor ??
-                        AppColors.primaryBlue.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child:
-                      contact.avatarUrl != null && contact.avatarUrl!.isNotEmpty
-                          ? ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
-                            child: Image.network(
-                              contact.avatarUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder:
-                                  (context, error, stackTrace) => Center(
-                                    child: Text(
-                                      contact.name.isNotEmpty
-                                          ? contact.name[0].toUpperCase()
-                                          : '?',
-                                      style: TextStyle(
-                                        color:
-                                            isDarkMode
-                                                ? AppColors.primaryBlue
-                                                : AppColors.darkText,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                  ),
-                            ),
-                          )
-                          : Center(
-                            child: Text(
-                              contact.name.isNotEmpty
-                                  ? contact.name[0].toUpperCase()
-                                  : '?',
-                              style: TextStyle(
-                                color:
-                                    isDarkMode
-                                        ? AppColors.primaryBlue
-                                        : AppColors.darkText,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
-                            ),
+            // Status indicator
+            Container(
+              width: 12,
+              height: 12,
+              margin: const EdgeInsets.only(right: 6.0),
+              decoration: BoxDecoration(
+                color:
+                    status != null
+                        ? _getStatusColor(status!)
+                        : Colors.grey.withOpacity(0.3),
+                shape: BoxShape.circle,
+                boxShadow:
+                    status != null
+                        ? [
+                          BoxShadow(
+                            color: _getStatusColor(status!).withOpacity(0.5),
+                            blurRadius: 4,
+                            spreadRadius: 1,
                           ),
-                ),
-                // Status indicator
-                if (status != null)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(status!),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color:
-                              isDarkMode
-                                  ? AppColors.darkBackground
-                                  : Colors.white,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+                        ]
+                        : null,
+              ),
             ),
-            const SizedBox(width: 16),
+
             // Contact information
             Expanded(
               child: Column(
@@ -145,9 +92,9 @@ class ContactItem extends StatelessWidget {
   Color _getStatusColor(ContactStatus status) {
     switch (status) {
       case ContactStatus.online:
-        return Colors.green;
+        return AppColors.onlineGreen;
       case ContactStatus.away:
-        return Colors.orange;
+        return AppColors.awayYellow;
       case ContactStatus.offline:
         return Colors.grey;
     }
