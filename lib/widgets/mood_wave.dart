@@ -112,9 +112,9 @@ class MoodWavePainter extends CustomPainter {
         );
 
     // Base wave parameters
-    final waveHeight = size.height * 0.6;
+    final waveHeight = size.height * 0.5;
     final waveLength = size.width;
-    final baseY = size.height * 0.7;
+    final baseY = size.height * 0.6;
 
     // Draw each participant's mood wave
     for (int i = 0; i < sortedParticipants.length; i++) {
@@ -187,15 +187,29 @@ class MoodWavePainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
 
-      // Position emoji on the wave
+      // Position emoji on the wave - making sure it's not too close to top or bottom
       final emojiX = waveLength * (0.1 + (i * 0.15)).clamp(0.1, 0.9);
-      final emojiY =
+      final rawEmojiY =
           baseY +
           math.sin(emojiX * frequency * 2 * math.pi / waveLength + speed) *
               amplitude -
-          15;
+          18;
 
-      textPainter.paint(canvas, Offset(emojiX, emojiY));
+      // Enforce minimum of 15px from top to prevent overflow
+      final emojiY = math.max(15.0, math.min(rawEmojiY, size.height - 25));
+
+      // Draw a small circle behind emoji for better visibility
+      canvas.drawCircle(
+        Offset(emojiX, emojiY),
+        10, // Circle radius
+        Paint()..color = Colors.white.withOpacity(0.3),
+      );
+
+      // Center the emoji on its position
+      textPainter.paint(
+        canvas,
+        Offset(emojiX - textPainter.width / 2, emojiY - textPainter.height / 2),
+      );
     }
   }
 

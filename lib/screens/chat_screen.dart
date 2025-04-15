@@ -344,16 +344,23 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       mainAxisSize: MainAxisSize.min,
       children: [
         // Mood wave visualization
-        MoodWave(
-          participants: _participants,
-          height: 60,
-          activityLevel: _chatActivityLevel,
+        Container(
+          height: 50,
+          clipBehavior: Clip.hardEdge,
+          decoration: BoxDecoration(
+            color: isDarkMode ? Colors.black12 : Colors.white10,
+          ),
+          child: MoodWave(
+            participants: _participants,
+            height: 50,
+            activityLevel: _chatActivityLevel,
+          ),
         ),
 
         // Participants avatars
         Container(
-          height: 70,
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          height: 115,
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
           decoration: BoxDecoration(
             color: isDarkMode ? Colors.black12 : Colors.white10,
             border: Border(
@@ -391,6 +398,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   ) {
     return Container(
       margin: const EdgeInsets.only(right: 12),
+      width: 40,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -398,7 +406,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             children: [
               MoodVisualizer(
                 mood: mood,
-                size: 40,
+                size: 36,
                 interactive: isCurrentUser,
                 showPulse: isCurrentUser,
                 onTap: isCurrentUser ? _showMoodSelector : null,
@@ -426,14 +434,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             name,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 9,
               color: isCurrentUser ? mood.color : Colors.grey,
               fontWeight: isCurrentUser ? FontWeight.bold : FontWeight.normal,
             ),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants.dart';
+import '../services/user_service.dart';
 import 'home_screen.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -146,23 +150,71 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  void _login() {
+  void _login() async {
     setState(() {
       _isLoading = true;
     });
 
-    // Simulate login delay
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
+    try {
+      // Get email and password from controllers
+      final email = _usernameController.text.trim();
+      final password = _passwordController.text;
+
+      // Validate inputs
+      if (email.isEmpty || password.isEmpty) {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter both email and password')),
+        );
         setState(() {
           _isLoading = false;
         });
+        return;
+      }
+
+      // Attempt to sign in with Firebase Auth
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+
+      // Ensure user exists in Firestore
+      final userService = UserService();
+      await userService.ensureUserExists(userCredential.user!);
+
+      if (mounted) {
+        // Navigate to home screen on success
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
       }
-    });
+    } on FirebaseAuthException catch (e) {
+      // Handle specific Firebase Auth errors
+      String errorMessage = 'Authentication failed';
+
+      if (e.code == 'user-not-found') {
+        errorMessage = 'No user found with this email';
+      } else if (e.code == 'wrong-password') {
+        errorMessage = 'Wrong password';
+      } else if (e.code == 'invalid-email') {
+        errorMessage = 'Invalid email format';
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage)));
+    } catch (e) {
+      // Handle other errors
+      print('Login error: ${e.toString()}');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   // Add new pan gesture handlers
@@ -230,6 +282,14 @@ class _LoginScreenState extends State<LoginScreen>
     // Resume other animations if needed
     // _floatController.repeat(reverse: true);
     // _rotateController.repeat();
+  }
+
+  // Add this method for handling sign up
+  void _showSignUpDialog() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SignupScreen()),
+    );
   }
 
   @override
@@ -558,7 +618,9 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () {
+                  _showSignUpDialog();
+                },
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.zero,

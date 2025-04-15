@@ -101,102 +101,123 @@ class _MoodVisualizerState extends State<MoodVisualizer>
                   widget.interactive
                       ? setState(() => _isPressed = false)
                       : null,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  final pulseScale =
-                      widget.showPulse
-                          ? 1.0 +
-                              ((widget.mood.intensityValue * 0.1) *
-                                  _pulseAnimation.value)
-                          : 1.0;
+          child: SizedBox(
+            width: widget.size * 1.2,
+            height: widget.size * 1.4, // Increased to accommodate label
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  height: widget.size * 1.1,
+                  width: widget.size * 1.1,
+                  child: AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      final pulseScale =
+                          widget.showPulse
+                              ? 1.0 +
+                                  ((widget.mood.intensityValue * 0.1) *
+                                      _pulseAnimation.value)
+                              : 1.0;
 
-                  return Transform.scale(
-                    scale: _isPressed ? 0.95 : (_isHovered ? 1.05 : pulseScale),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Outer glow
-                        Container(
-                          width: widget.size * 1.2,
-                          height: widget.size * 1.2,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: widget.mood.color.withOpacity(
-                                  widget.mood.intensityValue * 0.6,
-                                ),
-                                blurRadius:
-                                    widget.size / 3 * _pulseAnimation.value,
-                                spreadRadius:
-                                    widget.size / 10 * _pulseAnimation.value,
+                      return Transform.scale(
+                        scale:
+                            _isPressed
+                                ? 0.95
+                                : (_isHovered ? 1.05 : pulseScale),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Outer glow
+                            Container(
+                              width: widget.size * 1.1,
+                              height: widget.size * 1.1,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: widget.mood.color.withOpacity(
+                                      widget.mood.intensityValue * 0.6,
+                                    ),
+                                    blurRadius:
+                                        widget.size / 3 * _pulseAnimation.value,
+                                    spreadRadius:
+                                        widget.size /
+                                        10 *
+                                        _pulseAnimation.value,
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-
-                        // Main gradient background
-                        Container(
-                          width: widget.size,
-                          height: widget.size,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: widget.mood.gradient,
                             ),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
-                              width: 2.0,
+
+                            // Main gradient background
+                            Container(
+                              width: widget.size,
+                              height: widget.size,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: widget.mood.gradient,
+                                ),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.3),
+                                  width: 2.0,
+                                ),
+                              ),
                             ),
-                          ),
+
+                            // Mood content (emoji or animated icon)
+                            if (widget.mood.animatedIconAsset != null &&
+                                _assetExists(widget.mood.animatedIconAsset!))
+                              Lottie.asset(
+                                widget.mood.animatedIconAsset!,
+                                width: widget.size * 0.7,
+                                height: widget.size * 0.7,
+                                fit: BoxFit.contain,
+                              )
+                            else
+                              Text(
+                                widget.mood.emoji,
+                                style: TextStyle(fontSize: widget.size * 0.45),
+                              ),
+
+                            // Intensity indicator at the bottom
+                            Positioned(
+                              bottom: 4,
+                              child:
+                                  widget.size >= 40
+                                      ? _buildIntensityIndicator()
+                                      : const SizedBox(),
+                            ),
+                          ],
                         ),
-
-                        // Mood content (emoji or animated icon)
-                        if (widget.mood.animatedIconAsset != null &&
-                            _assetExists(widget.mood.animatedIconAsset!))
-                          Lottie.asset(
-                            widget.mood.animatedIconAsset!,
-                            width: widget.size * 0.8,
-                            height: widget.size * 0.8,
-                            fit: BoxFit.contain,
-                          )
-                        else
-                          Text(
-                            widget.mood.emoji,
-                            style: TextStyle(fontSize: widget.size * 0.5),
-                          ),
-
-                        // Intensity indicator at the bottom
-                        Positioned(
-                          bottom: 5,
-                          child: _buildIntensityIndicator(),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-
-              // Optional label
-              if (widget.label != null || widget.mood.label.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    widget.label ?? widget.mood.label,
-                    style: TextStyle(
-                      fontSize: widget.size * 0.2,
-                      fontWeight: FontWeight.w500,
-                      color: widget.mood.color,
-                    ),
+                      );
+                    },
                   ),
                 ),
-            ],
+
+                // Optional label
+                if (widget.label != null || widget.mood.label.isNotEmpty)
+                  Container(
+                    width: widget.size * 1.2,
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Text(
+                      widget.label ?? widget.mood.label,
+                      style: TextStyle(
+                        fontSize: widget.size * 0.18,
+                        fontWeight: FontWeight.w500,
+                        color: widget.mood.color,
+                      ),
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -249,26 +270,36 @@ class MoodIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: mood.gradient,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: mood.color.withOpacity(0.4),
-            blurRadius: 4,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
       child: Center(
-        child: Text(mood.emoji, style: TextStyle(fontSize: size * 0.7)),
+        child: Container(
+          width: size * 0.95,
+          height: size * 0.95,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: mood.gradient,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: mood.color.withOpacity(0.4),
+                blurRadius: 4,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              mood.emoji,
+              style: TextStyle(fontSize: size * 0.5),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
       ),
     );
   }

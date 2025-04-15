@@ -9,6 +9,7 @@ import '../widgets/horizontal_chat_room_card.dart';
 import 'contacts_screen.dart';
 import 'chat_screen.dart';
 import 'chats_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -102,6 +103,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const ContactsScreen()),
+      );
+    } else if (index == 3) {
+      // Settings tab
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const SettingsScreen()),
       );
     } else {
       setState(() {

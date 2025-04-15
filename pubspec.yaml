@@ -12,10 +12,14 @@ dependencies:
   google_fonts: ^6.1.0
   flutter_svg: ^2.0.9
   provider: ^6.1.1
-  glass_kit: ^3.0.0
+  glass_kit: ^4.0.1
   shared_preferences: ^2.2.2
-  intl: ^0.18.1
+  intl: ^0.20.2
   lottie: ^3.3.1
+  firebase_core: ^3.9.0
+  firebase_auth: ^5.3.4
+  google_sign_in: ^6.2.2
+  cloud_firestore: ^5.6.6
 
 dev_dependencies:
   flutter_test:
