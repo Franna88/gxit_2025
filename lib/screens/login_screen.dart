@@ -217,6 +217,41 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  /* Commented out Google Sign-In functionality for now
+  void _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final userService = UserService();
+      final userCredential = await userService.signInWithGoogle();
+
+      if (userCredential != null && mounted) {
+        // Navigate to home screen on success
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } catch (e) {
+      // Handle errors
+      print('Google Sign-In error: ${e.toString()}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google Sign-In failed: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  */
+
   // Add new pan gesture handlers
   void _onPanStart(DragStartDetails details) {
     setState(() {

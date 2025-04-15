@@ -120,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   void _logout() async {
     try {
-      await FirebaseAuth.instance.signOut();
+      await _userService.signOut();
 
       if (mounted) {
         // Navigate to login screen and remove all previous routes

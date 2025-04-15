@@ -173,6 +173,41 @@ class _SignupScreenState extends State<SignupScreen>
     }
   }
 
+  /* Commented out Google Sign-In functionality for now
+  void _signUpWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final userService = UserService();
+      final userCredential = await userService.signInWithGoogle();
+
+      if (userCredential != null && mounted) {
+        // Navigate to home screen on success
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } catch (e) {
+      // Handle errors
+      print('Google Sign-Up error: ${e.toString()}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google Sign-Up failed: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  */
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -384,40 +419,40 @@ class _SignupScreenState extends State<SignupScreen>
                               ),
                             ),
                           ),
+
+                          const SizedBox(height: 16),
+
+                          // Login text
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'ALREADY HAVE AN ACCOUNT? ',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.subtleText,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.zero,
+                                  textStyle: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                                child: const Text('LOGIN'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 40),
                         ],
                       ),
                     ),
-
-                    const SizedBox(height: 24),
-
-                    // Login text
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'ALREADY HAVE AN ACCOUNT? ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.subtleText,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.zero,
-                            textStyle: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                          child: const Text('LOGIN'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
                   ],
                 ),
               ),

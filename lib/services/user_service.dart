@@ -1,10 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_model.dart';
 
 class UserService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
@@ -104,5 +106,47 @@ class UserService {
       // User exists, just update the login timestamp
       await updateLastLogin(userId);
     }
+  }
+
+  // Sign in with Google
+  Future<UserCredential?> signInWithGoogle() async {
+    try {
+      // Begin the interactive sign-in process
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+      if (googleUser == null) {
+        // User canceled the sign-in flow
+        return null;
+      }
+
+      // Get authentication details from request
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      // Create credentials for Firebase
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in with Firebase
+      final userCredential = await _auth.signInWithCredential(credential);
+
+      // Ensure user exists in Firestore
+      if (userCredential.user != null) {
+        await ensureUserExists(userCredential.user!);
+      }
+
+      return userCredential;
+    } catch (e) {
+      print('Error signing in with Google: $e');
+      rethrow; // Re-throw the exception for the UI to handle
+    }
+  }
+
+  // Sign out
+  Future<void> signOut() async {
+    await _googleSignIn.signOut(); // Sign out from Google
+    await _auth.signOut(); // Sign out from Firebase
   }
 }
