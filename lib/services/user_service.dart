@@ -224,4 +224,58 @@ class UserService {
     await _googleSignIn.signOut(); // Sign out from Google
     await _auth.signOut(); // Sign out from Firebase
   }
+
+  // Search for users by name or email
+  Future<List<UserModel>> searchUsers(String query) async {
+    if (query.isEmpty) {
+      return [];
+    }
+
+    try {
+      // Search by name
+      final nameQuerySnapshot =
+          await _firestore
+              .collection('users')
+              .where('name', isGreaterThanOrEqualTo: query)
+              .where(
+                'name',
+                isLessThanOrEqualTo: query + '\uf8ff',
+              ) // Unicode trick for prefix search
+              .limit(10)
+              .get();
+
+      // Search by email
+      final emailQuerySnapshot =
+          await _firestore
+              .collection('users')
+              .where('email', isGreaterThanOrEqualTo: query)
+              .where('email', isLessThanOrEqualTo: query + '\uf8ff')
+              .limit(10)
+              .get();
+
+      // Combine results
+      final List<UserModel> users = [];
+
+      for (var doc in nameQuerySnapshot.docs) {
+        final user = UserModel.fromFirestore(doc);
+        // Don't add current user to search results
+        if (user.id != currentUserId) {
+          users.add(user);
+        }
+      }
+
+      for (var doc in emailQuerySnapshot.docs) {
+        final user = UserModel.fromFirestore(doc);
+        // Only add if not already added and not current user
+        if (!users.any((u) => u.id == user.id) && user.id != currentUserId) {
+          users.add(user);
+        }
+      }
+
+      return users;
+    } catch (e) {
+      print('Error searching users: $e');
+      return [];
+    }
+  }
 }

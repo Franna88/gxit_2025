@@ -5,6 +5,11 @@ import '../widgets/contact_group_header.dart';
 import '../models/contact.dart';
 import 'chat_screen.dart';
 import 'contact_invitation_screen.dart';
+import 'package:provider/provider.dart';
+import '../models/user_model.dart';
+import '../services/chat_service.dart';
+import '../models/contact_model.dart';
+import '../services/user_service.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -19,6 +24,9 @@ class _ContactsScreenState extends State<ContactsScreen>
   List<Map<String, dynamic>> _filteredContacts = [];
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
+  String _searchQuery = '';
+  bool _isSearchingUsers = false;
+  List<UserModel> _searchResults = [];
 
   // Animation for status glow effects
   late AnimationController _pulseController;
@@ -74,6 +82,8 @@ class _ContactsScreenState extends State<ContactsScreen>
   // All contacts in a flat list for searching
   List<Map<String, dynamic>> _allContacts = [];
 
+  late UserService _userService;
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +102,8 @@ class _ContactsScreenState extends State<ContactsScreen>
     _pulseAnimation = Tween<double>(begin: 0.7, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    _userService = UserService();
   }
 
   @override
@@ -117,9 +129,35 @@ class _ContactsScreenState extends State<ContactsScreen>
     });
   }
 
+  void _performSearch(String query) {
+    setState(() {
+      _searchQuery = query;
+      _isSearchingUsers = query.isNotEmpty;
+    });
+
+    if (query.isNotEmpty) {
+      _searchUsersInFirestore(query);
+    } else {
+      setState(() {
+        _searchResults = [];
+      });
+    }
+  }
+
+  Future<void> _searchUsersInFirestore(String query) async {
+    final results = await _userService.searchUsers(query);
+    setState(() {
+      _searchResults = results;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Only filter contacts if we're not searching for users
+    final List<ContactModel> filteredContacts =
+        !_isSearchingUsers ? _getFilteredContacts() : [];
 
     return Scaffold(
       appBar: AppBar(
@@ -129,7 +167,7 @@ class _ContactsScreenState extends State<ContactsScreen>
                   controller: _searchController,
                   autofocus: true,
                   decoration: InputDecoration(
-                    hintText: 'Search contacts...',
+                    hintText: 'Search contacts or find users...',
                     hintStyle: TextStyle(
                       color:
                           isDarkMode
@@ -444,4 +482,55 @@ class _ContactsScreenState extends State<ContactsScreen>
       MaterialPageRoute(builder: (context) => const ContactInvitationScreen()),
     );
   }
+
+  List<ContactModel> _getFilteredContacts() {
+    final contacts = [
+      ContactModel(
+        id: '1',
+        name: 'Alice Johnson',
+        address: 'address1',
+        phone: '+1 234 567 890',
+      ),
+      ContactModel(
+        id: '2',
+        name: 'Bob Smith',
+        address: 'address2',
+        phone: '+1 345 678 901',
+      ),
+      ContactModel(
+        id: '3',
+        name: 'Charlie Brown',
+        address: 'address3',
+        phone: '+1 456 789 012',
+      ),
+      ContactModel(
+        id: '4',
+        name: 'David Miller',
+        address: 'address4',
+        phone: '+1 567 890 123',
+      ),
+      ContactModel(
+        id: '5',
+        name: 'Eve Davis',
+        address: 'address5',
+        phone: '+1 678 901 234',
+      ),
+    ];
+
+    if (_searchQuery.isEmpty) {
+      return contacts;
+    }
+
+    return contacts.where((contact) {
+      return contact.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          (contact.phone != null && contact.phone!.contains(_searchQuery));
+    }).toList();
+  }
+
+  // Commented out due to missing dependencies
+  /*
+  Future<void> _startChatWithUser(UserModel user) async {
+    // Implementation requires missing UserProvider, ChatRoomScreen, etc.
+  }
+  */
 }
