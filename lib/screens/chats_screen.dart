@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../constants.dart';
 import '../widgets/chat_room_card.dart';
 import '../services/chat_service.dart';
+import '../services/location_service.dart';
+import '../models/area_chat_room.dart';
 import '../widgets/not_enough_tokens_dialog.dart';
 import '../widgets/token_balance.dart';
 import 'chat_screen.dart';
@@ -18,6 +20,12 @@ class _ChatsScreenState extends State<ChatsScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
+  // Location service to get area chat rooms
+  final _locationService = LocationService();
+  List<AreaChatRoom> _areaChatRooms = [];
+  List<AreaChatRoom> _privateChatRooms = [];
+  bool _isLoading = true;
+
   // Animation controllers for each card's hover effect
   final Map<int, AnimationController> _hoverControllers = {};
   bool _isHovering = false;
@@ -26,6 +34,9 @@ class _ChatsScreenState extends State<ChatsScreen>
   @override
   void initState() {
     super.initState();
+
+    // Load chat rooms
+    _loadChatRooms();
 
     // Pulse animation for neon elements
     _pulseController = AnimationController(
@@ -38,11 +49,33 @@ class _ChatsScreenState extends State<ChatsScreen>
     );
 
     // Initialize hover animations for each card
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 12; i++) {
       _hoverControllers[i] = AnimationController(
         vsync: this,
         duration: const Duration(milliseconds: 300),
       );
+    }
+  }
+
+  Future<void> _loadChatRooms() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final officialRooms = await _locationService.getOfficialAreaChatRooms();
+      final privateRooms = await _locationService.getPrivateChatRooms();
+
+      setState(() {
+        _areaChatRooms = officialRooms;
+        _privateChatRooms = privateRooms;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading chat rooms: $e');
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -75,21 +108,50 @@ class _ChatsScreenState extends State<ChatsScreen>
     }
   }
 
-  String _getTargetAudience(String name) {
-    if (name.contains('Photo') || name.contains('Image')) {
+  String _getTargetAudience(String name, String areaName) {
+    if (name.contains("Main Beach") || name.contains("Supertubes")) {
+      return 'For Surfers & Beach Lovers';
+    } else if (name.contains("Marina")) {
+      return 'For Marina Residents & Visitors';
+    } else if (name.contains("Francis")) {
+      return 'For St Francis Bay Locals';
+    } else if (name.contains("Photography") || name.contains("Photo")) {
       return 'For Visual Artists & Photographers';
-    } else if (name.contains('Music') || name.contains('Festival')) {
-      return 'For Music Lovers & Festival Goers';
-    } else if (name.contains('Travel') || name.contains('Adventure')) {
-      return 'For Explorers & Wanderers';
-    } else if (name.contains('Game') || name.contains('Gaming')) {
-      return 'For Gamers & E-Sports Fans';
-    } else if (name.contains('Tech')) {
-      return 'For Tech Enthusiasts & Innovators';
-    } else if (name.contains('Movie')) {
-      return 'For Film Buffs & Cinema Lovers';
+    } else if (name.contains("Surf") || name.contains("Beach")) {
+      return 'For Surfers & Beach Enthusiasts';
+    } else if (name.contains("Restaurant") || name.contains("Food")) {
+      return 'For Foodies & Culinary Enthusiasts';
+    } else if (name.contains("Fishing")) {
+      return 'For Fishing Enthusiasts';
+    } else if (name.contains("Golf")) {
+      return 'For Golf Enthusiasts';
+    } else if (name.contains("Extreme")) {
+      return 'For Adventure Seekers';
+    } else if (name.contains("Cleanup") || name.contains("Environment")) {
+      return 'For Environmental Activists';
     } else {
-      return 'Community Space';
+      return 'Community Space in ' + areaName;
+    }
+  }
+
+  // Get color based on chat room name
+  Color _getRoomColor(String name) {
+    if (name.contains("Main Beach") ||
+        name.contains("Surf") ||
+        name.contains("Beach")) {
+      return AppColors.primaryBlue;
+    } else if (name.contains("Marina") || name.contains("St Francis")) {
+      return AppColors.primaryPurple;
+    } else if (name.contains("Aston") ||
+        name.contains("Paradise") ||
+        name.contains("Cleanup")) {
+      return AppColors.primaryGreen;
+    } else if (name.contains("Photography") || name.contains("Extreme")) {
+      return AppColors.primaryOrange;
+    } else if (name.contains("Restaurant") || name.contains("Fish")) {
+      return AppColors.primaryYellow;
+    } else {
+      return AppColors.primaryBlue; // Default
     }
   }
 
@@ -128,158 +190,588 @@ class _ChatsScreenState extends State<ChatsScreen>
 
             // Main content
             SafeArea(
-              child: CustomScrollView(
-                slivers: [
-                  // App Bar with neon glow
-                  SliverAppBar(
-                    floating: true,
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    title: AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (context, child) {
-                        return Text(
-                          'CHAT ROOMS',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 2.0,
-                            shadows: [
-                              Shadow(
-                                color: AppColors.primaryBlue.withOpacity(
-                                  0.7 * _pulseAnimation.value,
+              child:
+                  _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : CustomScrollView(
+                        slivers: [
+                          // App Bar with neon glow
+                          SliverAppBar(
+                            floating: true,
+                            backgroundColor: Colors.transparent,
+                            elevation: 0,
+                            title: AnimatedBuilder(
+                              animation: _pulseController,
+                              builder: (context, child) {
+                                return Text(
+                                  'JEFFREYS BAY CHAT ROOMS',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: 2.0,
+                                    shadows: [
+                                      Shadow(
+                                        color: AppColors.primaryBlue
+                                            .withOpacity(
+                                              0.7 * _pulseAnimation.value,
+                                            ),
+                                        blurRadius: 10 * _pulseAnimation.value,
+                                      ),
+                                      Shadow(
+                                        color: AppColors.primaryPurple
+                                            .withOpacity(
+                                              0.5 * _pulseAnimation.value,
+                                            ),
+                                        blurRadius: 15 * _pulseAnimation.value,
+                                        offset: const Offset(2, 1),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                            leading: IconButton(
+                              icon: const Icon(Icons.arrow_back),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            actions: [
+                              _buildNeonIconButton(Icons.search),
+                              _buildNeonIconButton(Icons.add),
+                            ],
+                          ),
+
+                          // Section header for Area Chat Rooms
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                              child: Text(
+                                'AREA CHAT ROOMS',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.2,
+                                  shadows: [
+                                    Shadow(
+                                      color: AppColors.primaryBlue.withOpacity(
+                                        0.7,
+                                      ),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
                                 ),
-                                blurRadius: 10 * _pulseAnimation.value,
                               ),
-                              Shadow(
-                                color: AppColors.primaryPurple.withOpacity(
-                                  0.5 * _pulseAnimation.value,
+                            ),
+                          ),
+
+                          // Area Chat Rooms Grid
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                            sliver: SliverGrid(
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 0.85,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                  ),
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                                  if (index >= _areaChatRooms.length) {
+                                    return _buildCreateNewRoomTile();
+                                  }
+
+                                  final room = _areaChatRooms[index];
+                                  final color = _getRoomColor(room.name);
+
+                                  return _buildRoomTileFromRoom(
+                                    index,
+                                    room,
+                                    color,
+                                  );
+                                },
+                                childCount:
+                                    _areaChatRooms.length +
+                                    1, // +1 for "Create New" tile
+                              ),
+                            ),
+                          ),
+
+                          // Section header for Private Chat Rooms
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                              child: Text(
+                                'PRIVATE CHAT ROOMS',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.2,
+                                  shadows: [
+                                    Shadow(
+                                      color: AppColors.primaryPurple
+                                          .withOpacity(0.7),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
                                 ),
-                                blurRadius: 15 * _pulseAnimation.value,
-                                offset: const Offset(2, 1),
+                              ),
+                            ),
+                          ),
+
+                          // Private Chat Rooms Grid
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                            sliver: SliverGrid(
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 0.85,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                  ),
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                if (index >= _privateChatRooms.length) {
+                                  return null;
+                                }
+
+                                final room = _privateChatRooms[index];
+                                final color = _getRoomColor(room.name);
+
+                                return _buildRoomTileFromRoom(
+                                  index + _areaChatRooms.length,
+                                  room,
+                                  color,
+                                );
+                              }, childCount: _privateChatRooms.length),
+                            ),
+                          ),
+                        ],
+                      ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: _buildFloatingActionButton(),
+    );
+  }
+
+  Widget _buildRoomTileFromRoom(
+    int index,
+    AreaChatRoom room,
+    Color accentColor,
+  ) {
+    final random = DateTime.now().millisecond % 2 == 0;
+    final hasUnread = random;
+    final unreadCount = hasUnread ? ((DateTime.now().second % 5) + 1) : 0;
+    final targetAudience = _getTargetAudience(room.name, room.areaName);
+
+    // Generate a plausible last message
+    String lastMessage = '';
+    if (room.name.contains('Surf')) {
+      lastMessage = 'The waves look amazing today! 🌊';
+    } else if (room.name.contains('Restaurant')) {
+      lastMessage = 'Has anyone tried the new seafood place?';
+    } else if (room.name.contains('Marina')) {
+      lastMessage = 'Meeting at the clubhouse at 6pm';
+    } else if (room.name.contains('Fish')) {
+      lastMessage = 'Caught a 5kg yellowtail today! 🐟';
+    } else if (room.name.contains('Beach')) {
+      lastMessage = 'Beach day tomorrow if weather holds!';
+    } else if (room.name.contains('Golf')) {
+      lastMessage = 'Anyone up for a round this weekend?';
+    } else if (room.name.contains('Photography')) {
+      lastMessage = 'Sunset photos from Paradise Beach 📸';
+    } else {
+      lastMessage = 'Join the conversation in ${room.areaName}';
+    }
+
+    return _buildRoomTile(
+      index,
+      room.name,
+      lastMessage,
+      room.createdAt ?? DateTime.now().subtract(const Duration(hours: 5)),
+      room.memberCount,
+      hasUnread,
+      unreadCount,
+      accentColor,
+      targetAudience: targetAudience,
+    );
+  }
+
+  Widget _buildRoomTile(
+    int index,
+    String roomName,
+    String lastMessage,
+    DateTime lastActivity,
+    int memberCount,
+    bool hasUnreadMessages,
+    int unreadCount,
+    Color accentColor, {
+    String? targetAudience,
+  }) {
+    return MouseRegion(
+      onEnter: (_) => _onHover(index, true),
+      onExit: (_) => _onHover(index, false),
+      child: AnimatedBuilder(
+        animation: _hoverControllers[index] ?? _pulseController,
+        builder: (context, child) {
+          final hoverValue = _hoverControllers[index]?.value ?? 0.0;
+
+          return GestureDetector(
+            onTap: () => _navigateToChat(context, roomName),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    accentColor.withOpacity(0.2 + (0.1 * hoverValue)),
+                    const Color(0xFF1A1A2E),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: accentColor.withOpacity(0.3 + (0.3 * hoverValue)),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: accentColor.withOpacity(0.2 + (0.3 * hoverValue)),
+                    blurRadius: 10 * (1 + hoverValue),
+                    spreadRadius: 1 * (1 + hoverValue),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Room name
+                    Row(
+                      children: [
+                        Container(
+                          height: 12,
+                          width: 12,
+                          decoration: BoxDecoration(
+                            color:
+                                hasUnreadMessages
+                                    ? AppColors.primaryGreen
+                                    : accentColor,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: (hasUnreadMessages
+                                        ? AppColors.primaryGreen
+                                        : accentColor)
+                                    .withOpacity(0.5),
+                                blurRadius: 8,
+                                spreadRadius: 1,
                               ),
                             ],
                           ),
-                        );
-                      },
-                    ),
-                    leading: IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    actions: [
-                      _buildNeonIconButton(Icons.search),
-                      _buildNeonIconButton(Icons.add),
-                    ],
-                  ),
-
-                  // Chat Rooms Grid
-                  SliverPadding(
-                    padding: const EdgeInsets.all(16),
-                    sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.85,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            roomName,
+                            style: TextStyle(
+                              fontSize: 16 + (2 * hoverValue),
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                              shadows: [
+                                Shadow(
+                                  color: accentColor.withOpacity(0.7),
+                                  blurRadius: 5,
+                                ),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                      delegate: SliverChildListDelegate([
-                        _buildRoomTile(
-                          0,
-                          'Photography Lovers',
-                          'Emma: Check out my new portrait shots!',
-                          DateTime.now().subtract(const Duration(minutes: 5)),
-                          126,
-                          true,
-                          3,
-                          AppColors.primaryBlue,
                         ),
-                        _buildRoomTile(
-                          1,
-                          'Music Festival',
-                          "Alex: Who's going to Coachella this year?",
-                          DateTime.now().subtract(const Duration(hours: 1)),
-                          84,
-                          true,
-                          5,
-                          AppColors.primaryPurple,
+                      ],
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Target audience
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accentColor.withOpacity(
+                          0.15 + (0.05 * hoverValue),
                         ),
-                        _buildRoomTile(
-                          2,
-                          'Travel Adventures',
-                          'Rachel: Just booked my flight to Thailand!',
-                          DateTime.now().subtract(const Duration(hours: 6)),
-                          53,
-                          false,
-                          0,
-                          AppColors.primaryGreen,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: accentColor.withOpacity(
+                            0.2 + (0.1 * hoverValue),
+                          ),
+                          width: 1,
                         ),
-                        _buildRoomTile(
-                          3,
-                          'Gaming Squad',
-                          'Michael: Anyone up for Fortnite tonight?',
-                          DateTime.now().subtract(const Duration(days: 1)),
-                          98,
-                          false,
-                          0,
-                          AppColors.primaryOrange,
+                      ),
+                      child: Text(
+                        targetAudience ?? _getTargetAudience(roomName, ''),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.white.withOpacity(0.9),
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.5,
                         ),
-                        _buildRoomTile(
-                          4,
-                          'Tech Enthusiasts',
-                          'David: Have you seen the new AI advancements?',
-                          DateTime.now().subtract(const Duration(days: 2)),
-                          142,
-                          false,
-                          0,
-                          AppColors.primaryYellow,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Message preview
+                    Expanded(
+                      child: Text(
+                        lastMessage,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade300,
+                          height: 1.3,
                         ),
-                        _buildRoomTile(
-                          5,
-                          'Movie Club',
-                          'Sarah: The new Marvel movie was amazing!',
-                          DateTime.now().subtract(const Duration(days: 3)),
-                          72,
-                          false,
-                          0,
-                          AppColors.primaryPurple,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Bottom info row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Member count
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.people,
+                              size: 14,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              memberCount.toString(),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade400,
+                              ),
+                            ),
+                          ],
                         ),
-                        _buildCreateNewRoomTile(),
-                      ]),
+
+                        // Time or unread count
+                        hasUnreadMessages && unreadCount > 0
+                            ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryGreen,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primaryGreen.withOpacity(
+                                      0.5,
+                                    ),
+                                    blurRadius: 5,
+                                    spreadRadius: 0,
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                unreadCount.toString(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            )
+                            : Text(
+                              _getTimeText(lastActivity),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade400,
+                              ),
+                            ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _getTimeText(DateTime time) {
+    final now = DateTime.now();
+    final difference = now.difference(time);
+
+    if (difference.inMinutes < 1) {
+      return 'now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d';
+    } else {
+      return '${(difference.inDays / 7).floor()}w';
+    }
+  }
+
+  Widget _buildCreateNewRoomTile() {
+    return GestureDetector(
+      onTap: () {
+        _showCreateRoomDialog(context);
+      },
+      child: AnimatedBuilder(
+        animation: _pulseController,
+        builder: (context, child) {
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.primaryBlue.withOpacity(
+                  0.3 * _pulseAnimation.value,
+                ),
+                width: 1.5,
+                style: BorderStyle.solid,
+              ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withOpacity(0.3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withOpacity(
+                            0.3 * _pulseAnimation.value,
+                          ),
+                          blurRadius: 10 * _pulseAnimation.value,
+                          spreadRadius: 0,
+                        ),
+                      ],
+                      border: Border.all(
+                        color: AppColors.primaryBlue.withOpacity(
+                          0.5 * _pulseAnimation.value,
+                        ),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.add,
+                      size: 30,
+                      color: AppColors.primaryBlue.withOpacity(
+                        0.5 + (0.5 * _pulseAnimation.value),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'CREATE NEW ROOM',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryBlue.withOpacity(
+                        0.7 + (0.3 * _pulseAnimation.value),
+                      ),
+                      letterSpacing: 1.0,
+                      shadows: [
+                        Shadow(
+                          color: AppColors.primaryBlue.withOpacity(
+                            0.5 * _pulseAnimation.value,
+                          ),
+                          blurRadius: 5 * _pulseAnimation.value,
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: AnimatedBuilder(
-        animation: _pulseController,
-        builder: (context, child) {
-          return Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withOpacity(
-                    0.5 * _pulseAnimation.value,
-                  ),
-                  blurRadius: 12 * _pulseAnimation.value,
-                  spreadRadius: 2 * _pulseAnimation.value,
-                ),
-              ],
-            ),
-            child: FloatingActionButton(
-              onPressed: () {},
-              backgroundColor: AppColors.primaryBlue,
-              child: const Icon(Icons.add_comment, color: Colors.white),
-            ),
           );
         },
       ),
+    );
+  }
+
+  void _showCreateRoomDialog(BuildContext context) {
+    // Check if enough tokens are available
+    final enoughTokens = true; // This would be a real check in a real app
+
+    if (!enoughTokens) {
+      showDialog(
+        context: context,
+        builder:
+            (context) => NotEnoughTokensDialog(
+              requiredTokens: 50,
+              currentTokens: 0,
+              onBuyTokens: () {
+                // Do nothing for now
+              },
+            ),
+      );
+      return;
+    }
+
+    // Show room creation dialog
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A2E),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppColors.primaryBlue, width: 1),
+            ),
+            title: const Text(
+              'Create New Chat Room',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Feature coming soon in the next update!',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primaryBlue,
+                ),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
     );
   }
 
@@ -310,486 +802,31 @@ class _ChatsScreenState extends State<ChatsScreen>
     );
   }
 
-  Widget _buildRoomTile(
-    int index,
-    String name,
-    String lastMessage,
-    DateTime lastActivity,
-    int memberCount,
-    bool hasUnreadMessages,
-    int unreadCount,
-    Color accentColor,
-  ) {
-    final targetAudience = _getTargetAudience(name);
-
-    return MouseRegion(
-      onEnter: (_) => _onHover(index, true),
-      onExit: (_) => _onHover(index, false),
-      child: AnimatedBuilder(
-        animation: _hoverControllers[index] ?? _pulseController,
-        builder: (context, child) {
-          final hoverValue = _hoverControllers[index]?.value ?? 0.0;
-          final pulseValue = _pulseAnimation.value;
-
-          return GestureDetector(
-            onTap: () => _navigateToChat(context, name),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    accentColor.withOpacity(0.2 + (0.1 * hoverValue)),
-                    const Color(0xFF1A1A2E),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: accentColor.withOpacity(0.3 + (0.3 * hoverValue)),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: accentColor.withOpacity(
-                      (0.2 * pulseValue) + (0.3 * hoverValue),
-                    ),
-                    blurRadius: 10 * (pulseValue + hoverValue),
-                    spreadRadius: 1 * (pulseValue + hoverValue),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Room name with status indicator
-                  Row(
-                    children: [
-                      Container(
-                        height: 12,
-                        width: 12,
-                        decoration: BoxDecoration(
-                          color:
-                              hasUnreadMessages
-                                  ? AppColors.primaryGreen
-                                  : accentColor,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: (hasUnreadMessages
-                                      ? AppColors.primaryGreen
-                                      : accentColor)
-                                  .withOpacity(0.5 * pulseValue),
-                              blurRadius: 8 * pulseValue,
-                              spreadRadius: 1 * pulseValue,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          name,
-                          style: TextStyle(
-                            fontSize: 16 + (2 * hoverValue),
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.5,
-                            shadows: [
-                              Shadow(
-                                color: accentColor.withOpacity(
-                                  0.7 * pulseValue,
-                                ),
-                                blurRadius: 5 * pulseValue,
-                              ),
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  // Target audience label
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: accentColor.withOpacity(
-                        0.15 + (0.05 * hoverValue),
-                      ),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: accentColor.withOpacity(
-                          0.2 + (0.1 * hoverValue),
-                        ),
-                        width: 1,
-                      ),
-                    ),
-                    child: Text(
-                      targetAudience,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.white.withOpacity(0.9),
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.5,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  // Message preview
-                  Expanded(
-                    child: Text(
-                      lastMessage,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade300,
-                        height: 1.3,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Bottom info row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Member count
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.people,
-                            size: 14,
-                            color: Colors.grey.shade400,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$memberCount',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade400,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      // Unread count badge
-                      if (hasUnreadMessages && unreadCount > 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryGreen,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primaryGreen.withOpacity(
-                                  0.5 * pulseValue,
-                                ),
-                                blurRadius: 6 * pulseValue,
-                                spreadRadius: 1 * pulseValue,
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            unreadCount.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-
-                      // Time indicator
-                      Text(
-                        _getTimeText(lastActivity),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildCreateNewRoomTile() {
+  Widget _buildFloatingActionButton() {
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
-        final pulseValue = _pulseAnimation.value;
-
-        return GestureDetector(
-          onTap: () async {
-            // Check if user has enough tokens to create a room
-            final chatService = ChatService();
-            final tokenBalance = await chatService.getUserTokenBalance();
-
-            if (tokenBalance < 100) {
-              NotEnoughTokensDialog.show(
-                context: context,
-                requiredTokens: 100,
-                currentTokens: tokenBalance,
-                onBuyTokens: () {
-                  // This will be called after the user navigates back from token purchase
-                  // We refresh the UI when they return
-                  setState(() {
-                    // The UI will refresh
-                  });
-                },
-              );
-              return;
-            }
-
-            // Show dialog to create a new room
-            _showCreateRoomDialog(context);
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withOpacity(0.05 + (0.01 * pulseValue)),
-                  Colors.transparent,
-                ],
+        return Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryBlue.withOpacity(
+                  0.4 * _pulseAnimation.value,
+                ),
+                blurRadius: 15 * _pulseAnimation.value,
+                spreadRadius: 2 * _pulseAnimation.value,
               ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.1 + (0.05 * pulseValue)),
-                width: 1.5,
-                style: BorderStyle.solid,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withOpacity(0.1 * pulseValue),
-                  blurRadius: 8 * pulseValue,
-                  spreadRadius: 1 * pulseValue,
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.black.withOpacity(0.2),
-                    border: Border.all(
-                      color: AppColors.primaryBlue.withOpacity(
-                        0.3 + (0.2 * pulseValue),
-                      ),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primaryBlue.withOpacity(
-                          0.2 * pulseValue,
-                        ),
-                        blurRadius: 8 * pulseValue,
-                        spreadRadius: 1 * pulseValue,
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.add,
-                    color: AppColors.primaryBlue.withOpacity(
-                      0.7 + (0.3 * pulseValue),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  'Create New Room',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const Spacer(),
-                // Show the token cost
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withOpacity(
-                      0.1 + (0.05 * pulseValue),
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.primaryBlue.withOpacity(
-                        0.3 + (0.1 * pulseValue),
-                      ),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.token,
-                        size: 14,
-                        color: AppColors.primaryBlue.withOpacity(
-                          0.7 + (0.3 * pulseValue),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '100',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.9),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            ],
+          ),
+          child: FloatingActionButton(
+            onPressed: () => _showCreateRoomDialog(context),
+            backgroundColor: AppColors.primaryBlue,
+            child: const Icon(Icons.add),
           ),
         );
       },
     );
-  }
-
-  void _showCreateRoomDialog(BuildContext context) {
-    final TextEditingController nameController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A2E),
-            title: const Text(
-              'Create New Chat Room',
-              style: TextStyle(color: Colors.white),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Room Name',
-                    labelStyle: TextStyle(color: Colors.white70),
-                    enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white30),
-                    ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.primaryBlue),
-                    ),
-                  ),
-                  style: const TextStyle(color: Colors.white),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: AppColors.primaryBlue,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'This will cost 100 tokens',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                ),
-                onPressed: () async {
-                  if (nameController.text.trim().isEmpty) return;
-
-                  final chatService = ChatService();
-                  try {
-                    final roomId = await chatService.createChatRoom(
-                      name: nameController.text.trim(),
-                      memberIds: [],
-                    );
-
-                    if (roomId != null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Chat room created successfully!'),
-                          backgroundColor: AppColors.primaryGreen,
-                        ),
-                      );
-                    }
-                    Navigator.pop(context);
-                  } catch (e) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error: ${e.toString()}'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Create'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  String _getTimeText(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
-
-    if (difference.inMinutes < 1) {
-      return 'now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d';
-    } else {
-      return '${(difference.inDays / 7).floor()}w';
-    }
   }
 }
 

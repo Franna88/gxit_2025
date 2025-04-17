@@ -239,10 +239,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
 
-                  // Section header with neon effect
-                  _buildSectionHeader('Chat Rooms'),
-
-                  // Area Chat Rooms Section
+                  // Area Chat Rooms Section - No section header needed as it's included in the widget
                   SliverToBoxAdapter(
                     child: AreaChatRoomSection(
                       onRoomTap: (name) => _navigateToChat(context, name),

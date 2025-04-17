@@ -79,6 +79,100 @@ class LocationService {
     },
   };
 
+  // Private user-created chat rooms for the Jeffreys Bay area
+  static final List<Map<String, dynamic>> privateJBayChatRooms = [
+    {
+      'name': 'JBay Surf Forecast',
+      'areaName': 'Jeffreys Bay',
+      'latitude': -34.0507,
+      'longitude': 24.9307,
+      'description': 'Daily updates on surf conditions and forecasts',
+      'memberCount': 17,
+      'isOfficial': false,
+    },
+    {
+      'name': 'Local Restaurants',
+      'areaName': 'Jeffreys Bay',
+      'latitude': -34.0492,
+      'longitude': 24.9295,
+      'description': 'Restaurant recommendations and reviews in Jeffreys Bay',
+      'memberCount': 12,
+      'isOfficial': false,
+    },
+    {
+      'name': 'Fishing Spots',
+      'areaName': 'Jeffreys Bay Coast',
+      'latitude': -34.0467,
+      'longitude': 24.9335,
+      'description': 'Sharing best fishing spots along the coast',
+      'memberCount': 8,
+      'isOfficial': false,
+    },
+    {
+      'name': 'Beach Cleanup',
+      'areaName': 'Paradise Beach',
+      'latitude': -34.0744,
+      'longitude': 24.9142,
+      'description': 'Organizing beach cleanup events',
+      'memberCount': 15,
+      'isOfficial': false,
+    },
+    {
+      'name': 'Supertubes Surf Club',
+      'areaName': 'Supertubes',
+      'latitude': -34.0531,
+      'longitude': 24.9265,
+      'description': 'Local surf club for Supertubes regulars',
+      'memberCount': 19,
+      'isOfficial': false,
+    },
+    {
+      'name': 'Marina Homeowners',
+      'areaName': 'Marina Martinique',
+      'latitude': -34.0874,
+      'longitude': 24.9151,
+      'description': 'Chat for homeowners in Marina Martinique',
+      'memberCount': 11,
+      'isOfficial': false,
+    },
+    {
+      'name': 'St Francis Golf',
+      'areaName': 'St Francis Bay',
+      'latitude': -34.1715,
+      'longitude': 24.8419,
+      'description': 'Golf enthusiasts in St Francis Bay',
+      'memberCount': 9,
+      'isOfficial': false,
+    },
+    {
+      'name': 'Dolphin Sightings',
+      'areaName': 'Cape St Francis',
+      'latitude': -34.2049,
+      'longitude': 24.8361,
+      'description': 'Share dolphin and whale sightings in the area',
+      'memberCount': 14,
+      'isOfficial': false,
+    },
+    {
+      'name': 'Extreme Sports',
+      'areaName': 'Jeffreys Bay',
+      'latitude': -34.0507,
+      'longitude': 24.9307,
+      'description': 'For extreme sports enthusiasts in the area',
+      'memberCount': 7,
+      'isOfficial': false,
+    },
+    {
+      'name': 'Local Photography',
+      'areaName': 'Jeffreys Bay Region',
+      'latitude': -34.0507,
+      'longitude': 24.9307,
+      'description': 'Share your photos of the Jeffreys Bay region',
+      'memberCount': 20,
+      'isOfficial': false,
+    },
+  ];
+
   LocationService({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
 
@@ -230,9 +324,13 @@ class LocationService {
   // Generate Jeffreys Bay area chat rooms
   List<AreaChatRoom> _generateJeffreysBayAreaChatRooms() {
     final List<AreaChatRoom> chatRooms = [];
+    final random = Random();
 
     // Create a chat room for each defined area
     jeffreysBayAreas.forEach((areaName, details) {
+      // Ensure member count is between 5-20
+      final memberCount = random.nextInt(16) + 5; // 5 to 20 members
+
       chatRooms.add(
         AreaChatRoom(
           id: 'area-${areaName.toLowerCase().replaceAll(' ', '-')}',
@@ -243,16 +341,46 @@ class LocationService {
           radius: details['radius'],
           description: details['description'],
           isOfficial: true,
-          memberCount: Random().nextInt(100) + 50,
+          memberCount: memberCount,
           isPublic: true,
           createdAt: DateTime.now().subtract(
-            Duration(days: Random().nextInt(90)),
+            Duration(days: random.nextInt(90)),
           ),
         ),
       );
     });
 
     return chatRooms;
+  }
+
+  // Get all user-created private chat rooms
+  Future<List<AreaChatRoom>> getPrivateChatRooms() {
+    final random = Random();
+    final List<AreaChatRoom> privateChatRooms = [];
+
+    for (final roomData in privateJBayChatRooms) {
+      privateChatRooms.add(
+        AreaChatRoom(
+          id:
+              'private-${roomData['name'].toString().toLowerCase().replaceAll(' ', '-')}',
+          name: roomData['name'],
+          memberIds: [],
+          areaName: roomData['areaName'],
+          location: GeoPoint(roomData['latitude'], roomData['longitude']),
+          radius: 3.0, // Default radius for private rooms
+          description: roomData['description'],
+          isOfficial: false,
+          memberCount: roomData['memberCount'],
+          isPublic: false,
+          creatorId: 'user-${random.nextInt(1000)}',
+          createdAt: DateTime.now().subtract(
+            Duration(days: random.nextInt(60)),
+          ),
+        ),
+      );
+    }
+
+    return Future.value(privateChatRooms);
   }
 
   // Generate sample area chat rooms for testing
@@ -268,6 +396,9 @@ class LocationService {
 
       final areaName = _generateAreaName(lat, lng);
 
+      // Ensure member count is between 5-20
+      final memberCount = random.nextInt(16) + 5; // 5 to 20 members
+
       return AreaChatRoom(
         id: 'sample-${index + 1}',
         name: areaName,
@@ -277,7 +408,7 @@ class LocationService {
         radius: 5.0,
         description: 'Sample chat room #${index + 1} near your location',
         createdAt: DateTime.now(),
-        memberCount: random.nextInt(50) + 5,
+        memberCount: memberCount,
       );
     }).toList();
   }

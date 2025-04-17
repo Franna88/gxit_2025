@@ -20,6 +20,8 @@ class _AreaChatRoomSectionState extends State<AreaChatRoomSection>
   final LocationService _locationService = LocationService();
   bool _showOfficialRooms = true;
   List<AreaChatRoom> _areaChatRooms = [];
+  Map<String, bool> _hasUnreadMessages = {};
+  Map<String, int> _unreadCounts = {};
   bool _isLoading = true;
 
   late AnimationController _pulseController;
@@ -47,6 +49,19 @@ class _AreaChatRoomSectionState extends State<AreaChatRoomSection>
     super.dispose();
   }
 
+  // Generate and assign random unread message states
+  void _generateUnreadStates(List<AreaChatRoom> rooms) {
+    final random = math.Random();
+    _hasUnreadMessages.clear();
+    _unreadCounts.clear();
+
+    for (final room in rooms) {
+      final hasUnread = random.nextBool();
+      _hasUnreadMessages[room.id] = hasUnread;
+      _unreadCounts[room.id] = hasUnread ? random.nextInt(5) + 1 : 0;
+    }
+  }
+
   Future<void> _loadChatRooms() async {
     setState(() {
       _isLoading = true;
@@ -55,35 +70,19 @@ class _AreaChatRoomSectionState extends State<AreaChatRoomSection>
     try {
       if (_showOfficialRooms) {
         final rooms = await _locationService.getOfficialAreaChatRooms();
+        _generateUnreadStates(rooms);
+
         setState(() {
           _areaChatRooms = rooms;
           _isLoading = false;
         });
       } else {
-        // In a real app, this would load user-created chat rooms
-        // For demo, we'll just use the sample rooms with different IDs
-        final rooms = await _locationService.getNearbyAreaChatRooms();
-        final random = math.Random();
-        final userRooms =
-            rooms.map((room) {
-              return AreaChatRoom(
-                id: 'user-${random.nextInt(10000)}',
-                name: 'User Group: ${room.name}',
-                memberIds: [],
-                areaName: room.areaName,
-                location: room.location,
-                radius: room.radius,
-                description: 'User created group for ${room.areaName}',
-                isOfficial: false,
-                createdAt: DateTime.now().subtract(
-                  Duration(days: random.nextInt(30)),
-                ),
-                memberCount: random.nextInt(30) + 3,
-              );
-            }).toList();
+        // Load private user-created chat rooms
+        final rooms = await _locationService.getPrivateChatRooms();
+        _generateUnreadStates(rooms);
 
         setState(() {
-          _areaChatRooms = userRooms;
+          _areaChatRooms = rooms;
           _isLoading = false;
         });
       }
@@ -107,27 +106,20 @@ class _AreaChatRoomSectionState extends State<AreaChatRoomSection>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // Section Title with neon effect
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  return Text(
-                    'CHAT ROOMS',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 1.2,
-                      shadows: [
-                        Shadow(
-                          color: AppColors.primaryBlue.withOpacity(
-                            0.7 * _pulseAnimation.value,
-                          ),
-                          blurRadius: 8 * _pulseAnimation.value,
-                        ),
-                      ],
+              Text(
+                'CHAT ROOMS',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1.2,
+                  shadows: [
+                    Shadow(
+                      color: AppColors.primaryBlue.withOpacity(0.7),
+                      blurRadius: 8,
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
 
               // Toggle Switch
@@ -205,6 +197,9 @@ class _AreaChatRoomSectionState extends State<AreaChatRoomSection>
                     itemCount: _areaChatRooms.length,
                     itemBuilder: (context, index) {
                       final room = _areaChatRooms[index];
+                      final hasUnread = _hasUnreadMessages[room.id] ?? false;
+                      final unreadCount = _unreadCounts[room.id] ?? 0;
+
                       return HorizontalChatRoomCard(
                         name: room.name,
                         lastMessage:
@@ -212,8 +207,8 @@ class _AreaChatRoomSectionState extends State<AreaChatRoomSection>
                             'Join the conversation in ${room.areaName}',
                         lastActivity: room.createdAt ?? DateTime.now(),
                         memberCount: room.memberCount,
-                        hasUnreadMessages: math.Random().nextBool(),
-                        unreadCount: math.Random().nextInt(5),
+                        hasUnreadMessages: hasUnread,
+                        unreadCount: unreadCount,
                         onTap: () => widget.onRoomTap(room.name),
                       );
                     },
