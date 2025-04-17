@@ -160,32 +160,30 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
-    final chatService = ChatService();
-    final tokenBalance = await chatService.getUserTokenBalance();
+    final content = _messageController.text.trim();
 
-    // Check if user has enough tokens
-    if (tokenBalance < 1) {
-      if (mounted) {
-        NotEnoughTokensDialog.show(
-          context: context,
-          requiredTokens: 1,
-          currentTokens: tokenBalance,
-          onBuyTokens: () {
-            // This will be called after the user clicks "Get More Tokens"
-            // The actual navigation happens in the NotEnoughTokensDialog
-            // We just need to refresh the token balance when they come back
-            _refreshAfterTokenPurchase();
-          },
-        );
-      }
-      return;
-    }
-
-    // Try to send message with token
     try {
-      final content = _messageController.text.trim();
+      final chatService = ChatService();
+      final tokenBalance = await chatService.getUserTokenBalance();
+
+      // Check if user has enough tokens
+      if (tokenBalance < 1) {
+        if (mounted) {
+          NotEnoughTokensDialog.show(
+            context: context,
+            requiredTokens: 1,
+            currentTokens: tokenBalance,
+            onBuyTokens: () {
+              _refreshAfterTokenPurchase();
+            },
+          );
+        }
+        return;
+      }
+
+      // Try to send message with token
       final success = await chatService.sendMessage(
-        chatRoomId: 'demoRoom', // In a real app, use actual chatRoomId
+        chatRoomId: 'demoRoom', // Use demoRoom for testing
         content: content,
         mood: _currentMood.type,
       );
@@ -209,11 +207,26 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
         // Simulate response for demo purposes
         _simulateResponse();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to send message. Please try again later.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sending message: ${e.toString()}')),
-      );
+      print('Error in _sendMessage: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString().split(': ').last}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -342,44 +355,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       animation: _activityPulseController,
       builder: (context, child) {
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color: Colors.black26,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.bolt, color: Colors.white70, size: 16),
-              const SizedBox(width: 4),
+              const Icon(Icons.bolt, color: Colors.white70, size: 14),
+              const SizedBox(width: 2),
               Text(
                 '${(_chatActivityLevel * 100).toInt()}%',
                 style: const TextStyle(
                   color: Colors.white70,
-                  fontSize: 12,
+                  fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(width: 6),
-              ...List.generate(5, (index) {
-                final threshold = index * 0.2;
-                final isActive = _chatActivityLevel >= threshold;
-
-                return Container(
-                  width: 5,
-                  height: 12 + (index * 2),
-                  margin: const EdgeInsets.only(right: 2),
-                  decoration: BoxDecoration(
-                    color:
-                        isActive
-                            ? _getActivityColor(_chatActivityLevel).withOpacity(
-                              0.4 + (0.6 * _activityPulseController.value),
-                            )
-                            : Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                );
-              }),
             ],
           ),
         );
@@ -405,7 +398,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           height: 50,
           clipBehavior: Clip.hardEdge,
           decoration: BoxDecoration(
-            color: isDarkMode ? Colors.black12 : Colors.white10,
+            color: isDarkMode ? const Color(0xFF1F2130) : Colors.grey.shade200,
+            border: Border(
+              bottom: BorderSide(
+                color: isDarkMode ? Colors.white10 : Colors.black12,
+                width: 0.5,
+              ),
+            ),
           ),
           child: MoodWave(
             participants: _participants,
@@ -414,10 +413,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ),
         ),
 
-        // Participants avatars
+        // Mood selection row
         Container(
-          height: 115,
-          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: isDarkMode ? Colors.black12 : Colors.white10,
             border: Border(
@@ -427,82 +425,45 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          child: ListView(
+          child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            children: [
-              // Current user first
-              _buildParticipantAvatar('Me', _currentMood, true),
-
-              // Other participants
-              ..._participants.entries
-                  .map(
-                    (entry) =>
-                        _buildParticipantAvatar(entry.key, entry.value, false),
-                  )
-                  .toList(),
-            ],
+            child: Row(
+              children: [
+                _buildInfoText(),
+                const SizedBox(width: 8),
+                ...MoodOptions.allMoods.take(6).map((mood) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: GestureDetector(
+                      onTap: () => _changeMood(mood),
+                      child: MoodVisualizer(
+                        mood: mood,
+                        size: 32,
+                        interactive: true,
+                        showPulse: mood.name == _currentMood.name,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildParticipantAvatar(
-    String name,
-    UserMood mood,
-    bool isCurrentUser,
-  ) {
+  Widget _buildInfoText() {
     return Container(
-      margin: const EdgeInsets.only(right: 12),
-      width: 40,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Stack(
-            children: [
-              MoodVisualizer(
-                mood: mood,
-                size: 36,
-                interactive: isCurrentUser,
-                showPulse: isCurrentUser,
-                onTap: isCurrentUser ? _showMoodSelector : null,
-              ),
-              if (isCurrentUser)
-                Positioned(
-                  right: -4,
-                  top: -4,
-                  child: IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.edit,
-                        size: 12,
-                        color: Colors.black54,
-                      ),
-                    ),
-                    iconSize: 20,
-                    onPressed: _showMoodSelector,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            name,
-            style: TextStyle(
-              fontSize: 9,
-              color: isCurrentUser ? mood.color : Colors.grey,
-              fontWeight: isCurrentUser ? FontWeight.bold : FontWeight.normal,
-            ),
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'Tap an emoji to set your current mood',
+        style: TextStyle(color: Colors.white70, fontSize: 12),
       ),
     );
   }
@@ -519,16 +480,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           children: [
             const Icon(Icons.person),
             const SizedBox(width: 8),
-            Text(widget.contactName),
-            const Spacer(),
+            Expanded(
+              child: Text(widget.contactName, overflow: TextOverflow.ellipsis),
+            ),
             // Add token balance in the AppBar
             const TokenBalance(isCompact: true, showLabel: false),
           ],
         ),
         actions: [
-          _buildActivityIndicator(),
-          const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
           IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
         ],
       ),
@@ -582,14 +541,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               margin: const EdgeInsets.all(8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: isDarkMode ? AppColors.glassDark : AppColors.glassLight,
-                borderRadius: BorderRadius.circular(30),
+                color: isDarkMode ? const Color(0xFF252836) : Colors.white,
+                borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color:
-                      isDarkMode
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.black.withOpacity(0.05),
-                  width: 0.5,
+                  color: isDarkMode ? Colors.white10 : Colors.grey.shade300,
+                  width: 1,
                 ),
               ),
               child: Row(
@@ -597,36 +553,49 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   // Mood indicator for current message
                   GestureDetector(
                     onTap: _showMoodSelector,
-                    child: AnimatedBuilder(
-                      animation: _moodAnimationController,
-                      builder: (context, child) {
-                        return MoodIcon(mood: _currentMood, size: 36);
-                      },
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      child: MoodIcon(mood: _currentMood, size: 28),
                     ),
                   ),
                   Expanded(
                     child: TextField(
                       controller: _messageController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Type a message',
+                        hintStyle: TextStyle(
+                          color:
+                              isDarkMode ? Colors.grey : Colors.grey.shade600,
+                        ),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
                       ),
                       maxLines: null,
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.attach_file),
+                    color: Colors.grey,
                     onPressed: () {},
                   ),
                   Container(
-                    margin: const EdgeInsets.only(left: 4),
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      gradient: GradientPalette.buttonGradient,
+                      color: AppColors.primaryBlue,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.send, color: Colors.white),
+                      icon: const Icon(
+                        Icons.send,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       onPressed: _sendMessage,
                     ),
                   ),

@@ -114,52 +114,66 @@ class ChatService {
     required String content,
     MoodType? mood,
   }) async {
-    final userId = currentUserId;
-    if (userId == null) return false;
+    try {
+      final userId = currentUserId;
+      if (userId == null) {
+        print('Error: User is not authenticated');
+        return false;
+      }
 
-    // Check if user has enough tokens for sending a message
-    final hasTokens = await _userService.hasEnoughTokens(
-      userId,
-      ChatRoom.messageTokenCost,
-    );
+      // Special handling for demo room to bypass Firebase
+      if (chatRoomId == 'demoRoom') {
+        print('Demo room detected - bypassing Firebase operations');
+        return true;
+      }
 
-    if (!hasTokens) {
-      throw Exception('Not enough tokens to send a message');
+      // Check if user has enough tokens for sending a message
+      final hasTokens = await _userService.hasEnoughTokens(
+        userId,
+        ChatRoom.messageTokenCost,
+      );
+
+      if (!hasTokens) {
+        throw Exception('Not enough tokens to send a message');
+      }
+
+      // Get user data for the sender name
+      final user = await _userService.getUser(userId);
+      if (user == null) return false;
+
+      // Deduct tokens from user
+      final tokenUsed = await _userService.useTokens(
+        userId,
+        ChatRoom.messageTokenCost,
+      );
+
+      if (!tokenUsed) {
+        return false;
+      }
+
+      // Save the message
+      await _messagesCollection.add({
+        'content': content,
+        'senderId': userId,
+        'senderName': user.name,
+        'chatRoomId': chatRoomId,
+        'timestamp': FieldValue.serverTimestamp(),
+        'mood': mood?.index,
+        'tokenUsed': true,
+      });
+
+      // Update the chat room's last message
+      await getChatRoomRef(chatRoomId).update({
+        'lastMessage': content,
+        'lastSenderId': userId,
+        'lastActivity': FieldValue.serverTimestamp(),
+      });
+
+      return true;
+    } catch (e) {
+      print('Error sending message: $e');
+      return false; // Return false instead of rethrowing
     }
-
-    // Get user data for the sender name
-    final user = await _userService.getUser(userId);
-    if (user == null) return false;
-
-    // Deduct tokens from user
-    final tokenUsed = await _userService.useTokens(
-      userId,
-      ChatRoom.messageTokenCost,
-    );
-
-    if (!tokenUsed) {
-      return false;
-    }
-
-    // Save the message
-    await _messagesCollection.add({
-      'content': content,
-      'senderId': userId,
-      'senderName': user.name,
-      'chatRoomId': chatRoomId,
-      'timestamp': FieldValue.serverTimestamp(),
-      'mood': mood?.index,
-      'tokenUsed': true,
-    });
-
-    // Update the chat room's last message
-    await getChatRoomRef(chatRoomId).update({
-      'lastMessage': content,
-      'lastSenderId': userId,
-      'lastActivity': FieldValue.serverTimestamp(),
-    });
-
-    return true;
   }
 
   // Join a chat room
