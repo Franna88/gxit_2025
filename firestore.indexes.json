@@ -1,0 +1,47 @@
+{
+    "indexes": [
+        {
+            "collectionGroup": "messages",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "chatRoomId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "timestamp",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "chatRooms",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "memberIds",
+                    "arrayConfig": "CONTAINS"
+                },
+                {
+                    "fieldPath": "lastActivity",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "areaChatRooms",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "isOfficial",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        }
+    ],
+    "fieldOverrides": []
+}

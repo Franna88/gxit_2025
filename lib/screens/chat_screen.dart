@@ -3,16 +3,61 @@ import 'dart:math' as math;
 import '../constants.dart';
 import '../widgets/message_bubble.dart';
 import '../models/user_mood.dart';
+import '../models/chat_message.dart';
+import '../models/chat_room.dart';
 import '../widgets/mood_visualizer.dart';
 import '../widgets/mood_wave.dart';
 import '../services/chat_service.dart';
 import '../widgets/token_balance.dart';
 import '../widgets/not_enough_tokens_dialog.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+// Define Message class for backward compatibility with MessageBubble
+class Message {
+  final String content;
+  final DateTime timestamp;
+  final bool isMe;
+  final String senderName;
+  final UserMood mood;
+  final List<String>? reactions;
+
+  Message({
+    required this.content,
+    required this.timestamp,
+    required this.isMe,
+    required this.senderName,
+    required this.mood,
+    this.reactions,
+  });
+
+  Message copyWith({
+    String? content,
+    DateTime? timestamp,
+    bool? isMe,
+    String? senderName,
+    UserMood? mood,
+    List<String>? reactions,
+  }) {
+    return Message(
+      content: content ?? this.content,
+      timestamp: timestamp ?? this.timestamp,
+      isMe: isMe ?? this.isMe,
+      senderName: senderName ?? this.senderName,
+      mood: mood ?? this.mood,
+      reactions: reactions ?? this.reactions,
+    );
+  }
+}
 
 class ChatScreen extends StatefulWidget {
   final String contactName;
+  final String chatRoomId;
 
-  const ChatScreen({super.key, required this.contactName});
+  const ChatScreen({
+    super.key,
+    required this.contactName,
+    required this.chatRoomId,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -20,7 +65,14 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
-  final List<Message> _messages = [];
+  final List<ChatMessage> _messages = [];
+  final ChatService _chatService = ChatService();
+  bool _isLoading = true;
+
+  String? _currentUserId;
+
+  // Chat room data
+  ChatRoom? _chatRoom;
 
   // Current user mood
   late UserMood _currentMood;
@@ -40,6 +92,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _currentMood = MoodOptions.happy;
+    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
     // Setup animations
     _moodAnimationController = AnimationController(
@@ -59,12 +112,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
 
-    // Load demo data
-    _loadInitialMessages();
-    _setupDemoParticipants();
-
-    // Simulate chat activity changes
-    _simulateChatActivityChanges();
+    // Load chat room data and messages
+    _loadChatRoom();
+    _loadMessages();
   }
 
   @override
@@ -75,21 +125,76 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void _simulateChatActivityChanges() {
-    // Periodically change the activity level to simulate a dynamic chat
-    Future.delayed(const Duration(seconds: 15), () {
-      if (mounted) {
+  // Load chat room data
+  Future<void> _loadChatRoom() async {
+    try {
+      if (widget.chatRoomId == 'demoRoom') {
+        // For demo room, create a fake chat room
         setState(() {
-          // Random activity between 0.2 and 1.0
-          _chatActivityLevel = 0.2 + (math.Random().nextDouble() * 0.8);
+          _chatRoom = ChatRoom(
+            id: 'demoRoom',
+            name: widget.contactName,
+            memberIds: ['demo_user'],
+            lastMessage: 'This is a demo chat room',
+            lastSenderId: 'demo_user',
+            lastActivity: DateTime.now(),
+            isPublic: true,
+          );
+          _setupDemoParticipants();
         });
-        _simulateChatActivityChanges();
+        return;
       }
+
+      // Subscribe to the chat room stream
+      _chatService.getChatRoomStream(widget.chatRoomId).listen((chatRoom) {
+        if (chatRoom != null && mounted) {
+          setState(() {
+            _chatRoom = chatRoom;
+            _chatActivityLevel = 0.3 + (math.Random().nextDouble() * 0.4);
+          });
+        }
+      });
+    } catch (e) {
+      print('Error loading chat room: $e');
+    }
+  }
+
+  // Load messages from Firebase
+  Future<void> _loadMessages() async {
+    setState(() {
+      _isLoading = true;
     });
+
+    try {
+      if (widget.chatRoomId == 'demoRoom') {
+        // For demo room, add sample messages
+        _loadInitialMessages();
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Subscribe to the messages stream
+      _chatService.getChatMessagesStream(widget.chatRoomId).listen((messages) {
+        if (mounted) {
+          setState(() {
+            _messages.clear();
+            _messages.addAll(messages);
+            _isLoading = false;
+          });
+        }
+      });
+    } catch (e) {
+      print('Error loading messages: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   void _setupDemoParticipants() {
-    // Add some fake participants with different moods
+    // Add some fake participants with different moods for demo room
     _participants.addAll({
       'Alex': MoodOptions.excited,
       'Emma': MoodOptions.curious,
@@ -124,34 +229,42 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _loadInitialMessages() {
     // Sample messages for demo with moods and reactions
     _messages.addAll([
-      Message(
+      ChatMessage(
+        id: '1',
         content: 'Hey, how are you doing?',
-        timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
-        isMe: false,
+        senderId: 'demo_sender',
         senderName: widget.contactName,
-        mood: MoodOptions.curious,
+        chatRoomId: 'demoRoom',
+        timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
+        mood: MoodType.happy,
         reactions: ['👍', '❤️'],
       ),
-      Message(
+      ChatMessage(
+        id: '2',
         content: 'I\'m good, thanks! How about you?',
+        senderId: _currentUserId ?? 'current_user',
+        senderName: 'Me',
+        chatRoomId: 'demoRoom',
         timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 1)),
-        isMe: true,
-        senderName: 'Me',
-        mood: MoodOptions.happy,
+        mood: MoodType.happy,
       ),
-      Message(
+      ChatMessage(
+        id: '3',
         content: 'Just wanted to check if we\'re still on for tomorrow?',
-        timestamp: DateTime.now().subtract(const Duration(hours: 5)),
-        isMe: false,
+        senderId: 'demo_sender',
         senderName: widget.contactName,
-        mood: MoodOptions.relaxed,
+        chatRoomId: 'demoRoom',
+        timestamp: DateTime.now().subtract(const Duration(hours: 5)),
+        mood: MoodType.happy,
       ),
-      Message(
+      ChatMessage(
+        id: '4',
         content: 'Yes, definitely! Looking forward to it!',
-        timestamp: DateTime.now().subtract(const Duration(hours: 4)),
-        isMe: true,
+        senderId: _currentUserId ?? 'current_user',
         senderName: 'Me',
-        mood: MoodOptions.excited,
+        chatRoomId: 'demoRoom',
+        timestamp: DateTime.now().subtract(const Duration(hours: 4)),
+        mood: MoodType.excited,
         reactions: ['🎉'],
       ),
     ]);
@@ -163,15 +276,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final content = _messageController.text.trim();
 
     try {
-      final chatService = ChatService();
-      final tokenBalance = await chatService.getUserTokenBalance();
-
       // Check if user has enough tokens
-      if (tokenBalance < 1) {
+      final tokenBalance = await _chatService.getUserTokenBalance();
+
+      if (tokenBalance < ChatRoom.messageTokenCost) {
         if (mounted) {
           NotEnoughTokensDialog.show(
             context: context,
-            requiredTokens: 1,
+            requiredTokens: ChatRoom.messageTokenCost,
             currentTokens: tokenBalance,
             onBuyTokens: () {
               _refreshAfterTokenPurchase();
@@ -181,32 +293,39 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         return;
       }
 
-      // Try to send message with token
-      final success = await chatService.sendMessage(
-        chatRoomId: 'demoRoom', // Use demoRoom for testing
+      // Send message to Firebase
+      final success = await _chatService.sendMessage(
+        chatRoomId: widget.chatRoomId,
         content: content,
         mood: _currentMood.type,
       );
 
       if (success) {
-        setState(() {
-          _messages.add(
-            Message(
-              content: content,
-              timestamp: DateTime.now(),
-              isMe: true,
-              senderName: 'Me',
-              mood: _currentMood,
-            ),
-          );
-          _messageController.clear();
+        // Clear input field
+        _messageController.clear();
 
-          // Increase chat activity when new message is sent
-          _chatActivityLevel = math.min(1.0, _chatActivityLevel + 0.2);
-        });
+        // In demo mode, add message locally
+        if (widget.chatRoomId == 'demoRoom') {
+          setState(() {
+            _messages.add(
+              ChatMessage(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                content: content,
+                senderId: _currentUserId ?? 'current_user',
+                senderName: 'Me',
+                chatRoomId: 'demoRoom',
+                timestamp: DateTime.now(),
+                mood: _currentMood.type,
+              ),
+            );
 
-        // Simulate response for demo purposes
-        _simulateResponse();
+            // Increase chat activity when new message is sent
+            _chatActivityLevel = math.min(1.0, _chatActivityLevel + 0.2);
+          });
+
+          // Simulate response for demo purposes
+          _simulateResponse();
+        }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -232,63 +351,258 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   void _simulateResponse() {
     Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
+      if (mounted && widget.chatRoomId == 'demoRoom') {
         setState(() {
           // Simulated response with a random mood
           final responseMood = MoodOptions.getRandomMood();
 
           _messages.add(
-            Message(
+            ChatMessage(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
               content: 'Thanks for your message. I\'ll get back to you soon!',
-              timestamp: DateTime.now(),
-              isMe: false,
+              senderId: 'demo_sender',
               senderName: widget.contactName,
-              mood: responseMood,
+              chatRoomId: 'demoRoom',
+              timestamp: DateTime.now(),
+              mood: responseMood.type,
             ),
           );
-
-          // Update contact's mood based on their response
-          _participants[widget.contactName] = responseMood;
         });
       }
     });
   }
 
-  void _refreshAfterTokenPurchase() async {
-    // After user returns from token purchase, check balance again
-    final chatService = ChatService();
-    final tokenBalance = await chatService.getUserTokenBalance();
-
-    // Update the token balance in the UI
-    if (mounted) {
-      setState(() {
-        // The TokenBalance widget will automatically update
-      });
-    }
-  }
-
-  void _changeMood(UserMood newMood) {
-    if (_currentMood.name != newMood.name) {
-      setState(() {
-        _currentMood = newMood;
-        _moodAnimationController.forward(from: 0.0);
-      });
-    }
-  }
-
-  void _addReactionToMessage(int messageIndex, String reaction) {
+  void _refreshAfterTokenPurchase() {
+    // Refresh token balance and try again
     setState(() {
-      final message = _messages[messageIndex];
-      final List<String> currentReactions = List.from(message.reactions ?? []);
-
-      if (currentReactions.contains(reaction)) {
-        currentReactions.remove(reaction);
-      } else {
-        currentReactions.add(reaction);
-      }
-
-      _messages[messageIndex] = message.copyWith(reactions: currentReactions);
+      // Token purchase complete, refresh UI
     });
+  }
+
+  // Add reaction to a message
+  void _addReaction(String messageId, String reaction) async {
+    await _chatService.addReaction(messageId, reaction);
+  }
+
+  // User selected mood changed
+  void _onMoodChanged(UserMood mood) {
+    setState(() {
+      _currentMood = mood;
+    });
+    _moodAnimationController.forward(from: 0.0);
+  }
+
+  // Get UserMood from MoodType
+  UserMood _getMoodFromType(MoodType? moodType) {
+    if (moodType == null) return MoodOptions.relaxed;
+
+    switch (moodType) {
+      case MoodType.happy:
+        return MoodOptions.happy;
+      case MoodType.sad:
+        return MoodOptions.sad;
+      case MoodType.angry:
+        return MoodOptions.angry;
+      case MoodType.excited:
+        return MoodOptions.excited;
+      case MoodType.bored:
+        return MoodOptions.bored;
+      case MoodType.annoyed:
+        return MoodOptions.annoyed;
+      case MoodType.calm:
+        return MoodOptions.relaxed;
+      case MoodType.neutral:
+      default:
+        return MoodOptions.relaxed;
+    }
+  }
+
+  // Convert ChatMessage to Message format for MessageBubble
+  Message _convertToMessage(ChatMessage chatMessage) {
+    final isMe = chatMessage.senderId == _currentUserId;
+
+    return Message(
+      content: chatMessage.content,
+      timestamp: chatMessage.timestamp,
+      isMe: isMe,
+      senderName: isMe ? 'You' : chatMessage.senderName,
+      mood: _getMoodFromType(chatMessage.mood),
+      reactions: chatMessage.reactions,
+    );
+  }
+
+  // Build the message list
+  Widget _buildMessageList() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_messages.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 48,
+              color: Colors.white.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No messages yet',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Start a conversation!',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      reverse: true,
+      padding: const EdgeInsets.only(top: 15, bottom: 70),
+      itemCount: _messages.length,
+      itemBuilder: (context, index) {
+        final chatMessage = _messages[index];
+        final message = _convertToMessage(chatMessage);
+
+        return GestureDetector(
+          onLongPress: () {
+            // Show reactions menu
+          },
+          child: MessageBubble(
+            message: message,
+            onReactionTap: (reaction) => _addReaction(chatMessage.id, reaction),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+        elevation: 0,
+        title: Row(
+          children: [
+            const Icon(Icons.person),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(widget.contactName, overflow: TextOverflow.ellipsis),
+            ),
+            // Add token balance in the AppBar
+            const TokenBalance(isCompact: true, showLabel: false),
+          ],
+        ),
+        actions: [
+          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
+        ],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              isDarkMode ? AppColors.darkBackground : Colors.grey.shade100,
+              isDarkMode
+                  ? AppColors.darkBackground.withOpacity(0.9)
+                  : Colors.white,
+            ],
+          ),
+        ),
+        child: Column(
+          children: [
+            // Participants with mood indicators
+            _buildParticipantsRow(),
+
+            // Messages list
+            Expanded(child: _buildMessageList()),
+
+            // Message input bar
+            Container(
+              margin: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF252836) : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isDarkMode ? Colors.white10 : Colors.grey.shade300,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Mood indicator for current message
+                  GestureDetector(
+                    onTap: _showMoodSelector,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      child: MoodIcon(mood: _currentMood, size: 28),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: InputDecoration(
+                        hintText: 'Type a message',
+                        hintStyle: TextStyle(
+                          color:
+                              isDarkMode ? Colors.grey : Colors.grey.shade600,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                      maxLines: null,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.attach_file),
+                    color: Colors.grey,
+                    onPressed: () {},
+                  ),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.send,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      onPressed: _sendMessage,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showMoodSelector() {
@@ -331,7 +645,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                           .map(
                             (mood) => GestureDetector(
                               onTap: () {
-                                _changeMood(mood);
+                                _onMoodChanged(mood);
                                 Navigator.pop(context);
                               },
                               child: MoodVisualizer(
@@ -436,7 +750,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: GestureDetector(
-                      onTap: () => _changeMood(mood),
+                      onTap: () => _onMoodChanged(mood),
                       child: MoodVisualizer(
                         mood: mood,
                         size: 32,
@@ -465,424 +779,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         'Tap an emoji to set your current mood',
         style: TextStyle(color: Colors.white70, fontSize: 12),
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
-        elevation: 0,
-        title: Row(
-          children: [
-            const Icon(Icons.person),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(widget.contactName, overflow: TextOverflow.ellipsis),
-            ),
-            // Add token balance in the AppBar
-            const TokenBalance(isCompact: true, showLabel: false),
-          ],
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
-        ],
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              isDarkMode ? AppColors.darkBackground : Colors.grey.shade100,
-              isDarkMode
-                  ? AppColors.darkBackground.withOpacity(0.9)
-                  : Colors.white,
-            ],
-          ),
-        ),
-        child: Column(
-          children: [
-            // Participants with mood indicators
-            _buildParticipantsRow(),
-
-            // Messages list
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                reverse: true,
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  final reversedIndex = _messages.length - 1 - index;
-                  final message = _messages[reversedIndex];
-                  return GestureDetector(
-                    onLongPress: () {
-                      _showReactionsMenu(context, reversedIndex);
-                    },
-                    child: MessageBubble(
-                      message: message,
-                      onReactionTap: (reaction) {
-                        _addReactionToMessage(reversedIndex, reaction);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // Message input bar
-            Container(
-              margin: const EdgeInsets.all(8),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: isDarkMode ? const Color(0xFF252836) : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: isDarkMode ? Colors.white10 : Colors.grey.shade300,
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  // Mood indicator for current message
-                  GestureDetector(
-                    onTap: _showMoodSelector,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      child: MoodIcon(mood: _currentMood, size: 28),
-                    ),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Type a message',
-                        hintStyle: TextStyle(
-                          color:
-                              isDarkMode ? Colors.grey : Colors.grey.shade600,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                        ),
-                      ),
-                      style: TextStyle(
-                        color: isDarkMode ? Colors.white : Colors.black87,
-                      ),
-                      maxLines: null,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.attach_file),
-                    color: Colors.grey,
-                    onPressed: () {},
-                  ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryBlue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.send,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      onPressed: _sendMessage,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showReactionsMenu(BuildContext context, int messageIndex) {
-    final message = _messages[messageIndex];
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    // Categorized reactions
-    final reactionCategories = {
-      'Positive': ['👍', '❤️', '😊', '👏', '🎉'],
-      'Funny': ['😂', '🤣', '😆', '😜', '🤪'],
-      'Surprised': ['😮', '😲', '🤯', '😱', '🙀'],
-      'Negative': ['👎', '😢', '😠', '😡', '💔'],
-      'Other': ['🔥', '💯', '🤔', '💪', '✨'],
-    };
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder:
-          (context) => Container(
-            height: MediaQuery.of(context).size.height * 0.6,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color:
-                  isDarkMode ? AppColors.darkSecondaryBackground : Colors.white,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Header with user info
-                Row(
-                  children: [
-                    MoodIcon(mood: message.mood, size: 24),
-                    const SizedBox(width: 8),
-                    Text(
-                      'React to ${message.isMe ? 'your' : message.senderName}\'s message',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Message preview
-                Container(
-                  margin: const EdgeInsets.symmetric(vertical: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? Colors.black12 : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: message.mood.color.withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    message.content.length > 60
-                        ? '${message.content.substring(0, 60)}...'
-                        : message.content,
-                    style: TextStyle(
-                      color: isDarkMode ? Colors.white70 : Colors.black87,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-
-                // Current reactions display
-                if (message.reactions != null && message.reactions!.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color:
-                          isDarkMode
-                              ? Colors.white.withOpacity(0.05)
-                              : Colors.black.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Current: ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        ...message.reactions!
-                            .map(
-                              (emoji) => Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 2,
-                                ),
-                                child: Text(
-                                  emoji,
-                                  style: const TextStyle(fontSize: 18),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ],
-                    ),
-                  ),
-
-                // Tabbed reactions by category
-                Expanded(
-                  child: DefaultTabController(
-                    length: reactionCategories.length,
-                    child: Column(
-                      children: [
-                        TabBar(
-                          isScrollable: true,
-                          labelColor: Theme.of(context).colorScheme.primary,
-                          unselectedLabelColor:
-                              isDarkMode ? Colors.white60 : Colors.black54,
-                          tabs:
-                              reactionCategories.keys
-                                  .map((category) => Tab(text: category))
-                                  .toList(),
-                        ),
-                        Expanded(
-                          child: TabBarView(
-                            children:
-                                reactionCategories.entries.map((entry) {
-                                  return GridView.builder(
-                                    padding: const EdgeInsets.all(16),
-                                    gridDelegate:
-                                        const SliverGridDelegateWithFixedCrossAxisCount(
-                                          crossAxisCount: 5,
-                                          childAspectRatio: 1,
-                                          crossAxisSpacing: 10,
-                                          mainAxisSpacing: 10,
-                                        ),
-                                    itemCount: entry.value.length,
-                                    itemBuilder: (context, index) {
-                                      final emoji = entry.value[index];
-                                      final isSelected =
-                                          message.reactions?.contains(emoji) ??
-                                          false;
-
-                                      return InkWell(
-                                        onTap: () {
-                                          _addReactionToMessage(
-                                            messageIndex,
-                                            emoji,
-                                          );
-                                          Navigator.pop(context);
-                                        },
-                                        child: AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 300,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                isSelected
-                                                    ? Theme.of(context)
-                                                        .colorScheme
-                                                        .primary
-                                                        .withOpacity(0.2)
-                                                    : isDarkMode
-                                                    ? Colors.white.withOpacity(
-                                                      0.05,
-                                                    )
-                                                    : Colors.black.withOpacity(
-                                                      0.05,
-                                                    ),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                            border: Border.all(
-                                              color:
-                                                  isSelected
-                                                      ? Theme.of(
-                                                        context,
-                                                      ).colorScheme.primary
-                                                      : Colors.transparent,
-                                              width: 1,
-                                            ),
-                                            boxShadow:
-                                                isSelected
-                                                    ? [
-                                                      BoxShadow(
-                                                        color: Theme.of(context)
-                                                            .colorScheme
-                                                            .primary
-                                                            .withOpacity(0.3),
-                                                        blurRadius: 8,
-                                                        spreadRadius: 1,
-                                                      ),
-                                                    ]
-                                                    : null,
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              emoji,
-                                              style: const TextStyle(
-                                                fontSize: 28,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  );
-                                }).toList(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Custom reaction button
-                TextButton.icon(
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: const Text('Custom Reaction'),
-                  onPressed: () {
-                    // Show emoji picker or custom input
-                    Navigator.pop(context);
-                    // Implementation for custom reaction would go here
-                  },
-                ),
-              ],
-            ),
-          ),
-    );
-  }
-}
-
-class Message {
-  final String content;
-  final DateTime timestamp;
-  final bool isMe;
-  final String senderName;
-  final UserMood mood;
-  final List<String>? reactions;
-
-  Message({
-    required this.content,
-    required this.timestamp,
-    required this.isMe,
-    required this.senderName,
-    required this.mood,
-    this.reactions,
-  });
-
-  Message copyWith({
-    String? content,
-    DateTime? timestamp,
-    bool? isMe,
-    String? senderName,
-    UserMood? mood,
-    List<String>? reactions,
-  }) {
-    return Message(
-      content: content ?? this.content,
-      timestamp: timestamp ?? this.timestamp,
-      isMe: isMe ?? this.isMe,
-      senderName: senderName ?? this.senderName,
-      mood: mood ?? this.mood,
-      reactions: reactions ?? this.reactions,
     );
   }
 }

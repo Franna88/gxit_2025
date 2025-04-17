@@ -317,7 +317,11 @@ class _ContactsScreenState extends State<ContactsScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ChatScreen(contactName: contactName),
+        builder:
+            (context) => ChatScreen(
+              contactName: contactName,
+              chatRoomId: 'demoRoom', // Use demo room for now
+            ),
       ),
     );
   }

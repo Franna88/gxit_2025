@@ -263,6 +263,72 @@ class ChatService {
     final userId = currentUserId;
     if (userId == null) return 0;
 
-    return await _userService.getUserTokens(userId);
+    try {
+      final user = await _userService.getUser(userId);
+      return user?.tokens ?? 0;
+    } catch (e) {
+      print('Error getting token balance: $e');
+      return 0;
+    }
+  }
+
+  // Create a new area chat room
+  Future<String?> createAreaChatRoom({
+    required String name,
+    required String areaName,
+    required GeoPoint location,
+    required double radius,
+    String? imageUrl,
+    String? description,
+    required List<String> memberIds,
+    bool isPublic = true,
+    bool isOfficial = false,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) return null;
+
+    // Check if user has enough tokens for creating a room
+    final hasTokens = await _userService.hasEnoughTokens(
+      userId,
+      ChatRoom.createRoomTokenCost,
+    );
+
+    if (!hasTokens) {
+      throw Exception('Not enough tokens to create a chat room');
+    }
+
+    // Deduct tokens from user
+    final tokenUsed = await _userService.useTokens(
+      userId,
+      ChatRoom.createRoomTokenCost,
+    );
+
+    if (!tokenUsed) {
+      return null;
+    }
+
+    // Include creator in members if not already
+    if (!memberIds.contains(userId)) {
+      memberIds.add(userId);
+    }
+
+    // Create the area chat room
+    final docRef = await _firestore.collection('areaChatRooms').add({
+      'name': name,
+      'areaName': areaName,
+      'location': location,
+      'radius': radius,
+      'imageUrl': imageUrl,
+      'description': description,
+      'memberIds': memberIds,
+      'memberCount': memberIds.length,
+      'creatorId': userId,
+      'isPublic': isPublic,
+      'isOfficial': isOfficial,
+      'createdAt': FieldValue.serverTimestamp(),
+      'lastActivity': FieldValue.serverTimestamp(),
+    });
+
+    return docRef.id;
   }
 }

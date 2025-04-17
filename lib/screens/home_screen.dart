@@ -121,7 +121,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _navigateToChat(BuildContext context, String name) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => ChatScreen(contactName: name)),
+      MaterialPageRoute(
+        builder:
+            (context) => ChatScreen(
+              contactName: name,
+              chatRoomId: 'demoRoom', // Use demo room for now
+            ),
+      ),
     );
   }
 

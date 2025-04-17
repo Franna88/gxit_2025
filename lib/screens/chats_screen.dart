@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../constants.dart';
 import '../widgets/chat_room_card.dart';
 import '../services/chat_service.dart';
 import '../services/location_service.dart';
 import '../models/area_chat_room.dart';
+import '../models/chat_room.dart';
 import '../widgets/not_enough_tokens_dialog.dart';
 import '../widgets/token_balance.dart';
 import 'chat_screen.dart';
@@ -88,10 +90,12 @@ class _ChatsScreenState extends State<ChatsScreen>
     super.dispose();
   }
 
-  void _navigateToChat(BuildContext context, String name) {
+  void _navigateToChat(BuildContext context, String name, String roomId) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => ChatScreen(contactName: name)),
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(contactName: name, chatRoomId: roomId),
+      ),
     );
   }
 
@@ -401,6 +405,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       unreadCount,
       accentColor,
       targetAudience: targetAudience,
+      roomId: room.id,
     );
   }
 
@@ -414,6 +419,7 @@ class _ChatsScreenState extends State<ChatsScreen>
     int unreadCount,
     Color accentColor, {
     String? targetAudience,
+    required String roomId,
   }) {
     return MouseRegion(
       onEnter: (_) => _onHover(index, true),
@@ -424,7 +430,7 @@ class _ChatsScreenState extends State<ChatsScreen>
           final hoverValue = _hoverControllers[index]?.value ?? 0.0;
 
           return GestureDetector(
-            onTap: () => _navigateToChat(context, roomName),
+            onTap: () => _navigateToChat(context, roomName, roomId),
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -649,7 +655,14 @@ class _ChatsScreenState extends State<ChatsScreen>
         builder: (context, child) {
           return Container(
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primaryBlue.withOpacity(0.2),
+                  Colors.black.withOpacity(0.3),
+                ],
+              ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: AppColors.primaryBlue.withOpacity(
@@ -658,6 +671,15 @@ class _ChatsScreenState extends State<ChatsScreen>
                 width: 1.5,
                 style: BorderStyle.solid,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withOpacity(
+                    0.2 * _pulseAnimation.value,
+                  ),
+                  blurRadius: 8 * _pulseAnimation.value,
+                  spreadRadius: 1,
+                ),
+              ],
             ),
             child: Center(
               child: Column(
@@ -693,7 +715,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Text(
                     'CREATE NEW ROOM',
                     style: TextStyle(
@@ -713,6 +735,40 @@ class _ChatsScreenState extends State<ChatsScreen>
                       ],
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.primaryOrange.withOpacity(0.5),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.token,
+                          size: 12,
+                          color: AppColors.primaryOrange.withOpacity(0.8),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${ChatRoom.createRoomTokenCost} TOKENS',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.primaryOrange.withOpacity(0.8),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -723,25 +779,185 @@ class _ChatsScreenState extends State<ChatsScreen>
   }
 
   void _showCreateRoomDialog(BuildContext context) {
-    // Check if enough tokens are available
-    final enoughTokens = true; // This would be a real check in a real app
+    final TextEditingController roomNameController = TextEditingController();
+    final TextEditingController descriptionController = TextEditingController();
+    bool isPublic = true;
+    final chatService = ChatService();
 
-    if (!enoughTokens) {
-      showDialog(
-        context: context,
-        builder:
-            (context) => NotEnoughTokensDialog(
-              requiredTokens: 50,
-              currentTokens: 0,
-              onBuyTokens: () {
-                // Do nothing for now
-              },
-            ),
-      );
-      return;
-    }
+    showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setState) => AlertDialog(
+                  backgroundColor: const Color(0xFF1A1A2E),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(
+                      color: AppColors.primaryBlue,
+                      width: 1,
+                    ),
+                  ),
+                  title: const Text(
+                    'Create New Chat Room',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: roomNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Room Name',
+                            labelStyle: TextStyle(color: Colors.white70),
+                            enabledBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.white30),
+                            ),
+                          ),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: descriptionController,
+                          decoration: const InputDecoration(
+                            labelText: 'Description (Optional)',
+                            labelStyle: TextStyle(color: Colors.white70),
+                            enabledBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.white30),
+                            ),
+                          ),
+                          style: const TextStyle(color: Colors.white),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            const Text(
+                              'Public Room: ',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                            Switch(
+                              value: isPublic,
+                              onChanged: (value) {
+                                setState(() {
+                                  isPublic = value;
+                                });
+                              },
+                              activeColor: AppColors.primaryBlue,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Note: Creating a room costs 100 tokens',
+                          style: TextStyle(color: Colors.orange, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                      ),
+                      child: const Text('CANCEL'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final roomName = roomNameController.text.trim();
+                        if (roomName.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Room name cannot be empty'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
 
-    // Show room creation dialog
+                        // Check if user has enough tokens
+                        try {
+                          final tokenBalance =
+                              await chatService.getUserTokenBalance();
+
+                          if (tokenBalance < ChatRoom.createRoomTokenCost) {
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              NotEnoughTokensDialog.show(
+                                context: context,
+                                requiredTokens: ChatRoom.createRoomTokenCost,
+                                currentTokens: tokenBalance,
+                                onBuyTokens: () {
+                                  // Handle token purchase
+                                },
+                              );
+                            }
+                            return;
+                          }
+
+                          // Create new room
+                          final roomId = await chatService.createChatRoom(
+                            name: roomName,
+                            memberIds: [chatService.currentUserId!],
+                            isPublic: isPublic,
+                          );
+
+                          if (roomId != null && context.mounted) {
+                            Navigator.pop(context);
+
+                            // Show success dialog
+                            _showRoomCreatedDialog(context, roomName, roomId);
+
+                            // Refresh rooms
+                            if (mounted) {
+                              _loadChatRooms();
+                            }
+                          } else if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Failed to create chat room'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Error: ${e.toString().split(': ').last}',
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('CREATE'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
+  // Show success dialog after creating a room
+  void _showRoomCreatedDialog(
+    BuildContext context,
+    String roomName,
+    String roomId,
+  ) {
     showDialog(
       context: context,
       builder:
@@ -749,26 +965,100 @@ class _ChatsScreenState extends State<ChatsScreen>
             backgroundColor: const Color(0xFF1A1A2E),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: AppColors.primaryBlue, width: 1),
+              side: const BorderSide(color: AppColors.primaryGreen, width: 1),
             ),
-            title: const Text(
-              'Create New Chat Room',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+            title: Row(
+              children: [
+                const Icon(Icons.check_circle, color: AppColors.primaryGreen),
+                const SizedBox(width: 8),
+                const Text(
+                  'Success!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-            content: const Text(
-              'Feature coming soon in the next update!',
-              style: TextStyle(color: Colors.white70),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your chat room "$roomName" has been created successfully!',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Room ID:',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          roomId,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.copy,
+                          color: Colors.white54,
+                          size: 16,
+                        ),
+                        onPressed: () {
+                          // Copy room ID to clipboard
+                          Clipboard.setData(ClipboardData(text: roomId));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Room ID copied to clipboard'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        constraints: const BoxConstraints(
+                          minWidth: 24,
+                          minHeight: 24,
+                        ),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primaryBlue,
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                child: const Text('CLOSE'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Navigate to the chat room
+                  _navigateToChat(context, roomName, roomId);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryGreen,
+                  foregroundColor: Colors.white,
                 ),
-                child: const Text('OK'),
+                child: const Text('OPEN ROOM'),
               ),
             ],
           ),

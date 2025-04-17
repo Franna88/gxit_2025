@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/area_chat_room.dart';
+import '../models/chat_room.dart';
 import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LocationService {
   final FirebaseFirestore _firestore;
@@ -262,29 +264,10 @@ class LocationService {
     return "Area_${lat}_${lng}";
   }
 
-  // Get nearby area chat rooms
-  Future<List<AreaChatRoom>> getNearbyAreaChatRooms() async {
-    final position = await getCurrentLocation();
-    Position currentPosition;
-
-    if (position == null) {
-      // Use Jeffreys Bay coordinates if we can't get location
-      currentPosition = Position(
-        latitude: jeffreysBayLat,
-        longitude: jeffreysBayLng,
-        timestamp: DateTime.now(),
-        accuracy: 0,
-        altitude: 0,
-        heading: 0,
-        speed: 0,
-        speedAccuracy: 0,
-        altitudeAccuracy: 0,
-        headingAccuracy: 0,
-      );
-    } else {
-      currentPosition = position;
-    }
-
+  // Get nearby area chat rooms from Firestore
+  Future<List<AreaChatRoom>> getNearbyAreaChatRoomsFromFirestore(
+    Position currentPosition,
+  ) async {
     try {
       // In a real implementation, we would query Firestore for nearby chat rooms
       // based on geohashing or a geographical query
@@ -353,34 +336,102 @@ class LocationService {
     return chatRooms;
   }
 
-  // Get all user-created private chat rooms
-  Future<List<AreaChatRoom>> getPrivateChatRooms() {
-    final random = Random();
-    final List<AreaChatRoom> privateChatRooms = [];
+  // Get official area chat rooms
+  Future<List<AreaChatRoom>> getOfficialAreaChatRooms() async {
+    try {
+      final snapshot =
+          await _firestore
+              .collection('areaChatRooms')
+              .where('isOfficial', isEqualTo: true)
+              .orderBy('createdAt', descending: true)
+              .get();
 
-    for (final roomData in privateJBayChatRooms) {
-      privateChatRooms.add(
-        AreaChatRoom(
-          id:
-              'private-${roomData['name'].toString().toLowerCase().replaceAll(' ', '-')}',
-          name: roomData['name'],
-          memberIds: [],
-          areaName: roomData['areaName'],
-          location: GeoPoint(roomData['latitude'], roomData['longitude']),
-          radius: 3.0, // Default radius for private rooms
-          description: roomData['description'],
-          isOfficial: false,
-          memberCount: roomData['memberCount'],
-          isPublic: false,
-          creatorId: 'user-${random.nextInt(1000)}',
-          createdAt: DateTime.now().subtract(
-            Duration(days: random.nextInt(60)),
-          ),
-        ),
-      );
+      if (snapshot.docs.isEmpty) {
+        return _generateOfficialAreaChatRooms();
+      }
+
+      return snapshot.docs
+          .map((doc) => AreaChatRoom.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching official area chat rooms: $e');
+      return _generateOfficialAreaChatRooms();
     }
+  }
 
-    return Future.value(privateChatRooms);
+  // Get private chat rooms for the current user
+  Future<List<AreaChatRoom>> getPrivateChatRooms() async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) {
+        return [];
+      }
+
+      // Get regular chat rooms first
+      final regularRoomsSnapshot =
+          await _firestore
+              .collection('chatRooms')
+              .where('memberIds', arrayContains: userId)
+              .where('isPublic', isEqualTo: false)
+              .orderBy('lastActivity', descending: true)
+              .get();
+
+      List<AreaChatRoom> chatRooms = [];
+
+      // Convert regular chat rooms to area chat rooms (with default location)
+      if (regularRoomsSnapshot.docs.isNotEmpty) {
+        chatRooms =
+            regularRoomsSnapshot.docs.map((doc) {
+              final chatRoom = ChatRoom.fromFirestore(doc);
+
+              // Create a pseudo area chat room
+              return AreaChatRoom(
+                id: chatRoom.id,
+                name: chatRoom.name,
+                memberIds: chatRoom.memberIds,
+                areaName: 'Private',
+                location: const GeoPoint(-34.0507, 24.9307), // Default location
+                radius: 5.0,
+                lastMessage: chatRoom.lastMessage,
+                lastSenderId: chatRoom.lastSenderId,
+                lastActivity: chatRoom.lastActivity,
+                memberCount: chatRoom.memberCount,
+                isPublic: chatRoom.isPublic,
+                creatorId: chatRoom.creatorId,
+                createdAt: chatRoom.createdAt,
+              );
+            }).toList();
+      }
+
+      // Get area chat rooms that are private and the user is a member
+      final areaRoomsSnapshot =
+          await _firestore
+              .collection('areaChatRooms')
+              .where('memberIds', arrayContains: userId)
+              .where('isPublic', isEqualTo: false)
+              .orderBy('lastActivity', descending: true)
+              .get();
+
+      // Add area chat rooms to the list
+      if (areaRoomsSnapshot.docs.isNotEmpty) {
+        chatRooms.addAll(
+          areaRoomsSnapshot.docs.map((doc) => AreaChatRoom.fromFirestore(doc)),
+        );
+      }
+
+      // Sort by lastActivity
+      chatRooms.sort((a, b) {
+        if (a.lastActivity == null && b.lastActivity == null) return 0;
+        if (a.lastActivity == null) return 1;
+        if (b.lastActivity == null) return -1;
+        return b.lastActivity!.compareTo(a.lastActivity!);
+      });
+
+      return chatRooms;
+    } catch (e) {
+      debugPrint('Error fetching private chat rooms: $e');
+      return [];
+    }
   }
 
   // Generate sample area chat rooms for testing
@@ -413,11 +464,6 @@ class LocationService {
     }).toList();
   }
 
-  // Get all official area chat rooms
-  Future<List<AreaChatRoom>> getOfficialAreaChatRooms() {
-    return Future.value(_generateJeffreysBayAreaChatRooms());
-  }
-
   // Create a new area chat room for a specific location
   Future<String?> createAreaChatRoom(AreaChatRoom room) async {
     try {
@@ -429,5 +475,66 @@ class LocationService {
       debugPrint('Error creating area chat room: $e');
       return null;
     }
+  }
+
+  // Generate official area chat rooms (fallback method)
+  List<AreaChatRoom> _generateOfficialAreaChatRooms() {
+    final random = Random();
+    final List<AreaChatRoom> areaRooms = [];
+
+    // Use the same data as the other method
+    final chatRoomData = [
+      {
+        'name': 'Jeffreys Bay Main Beach',
+        'areaName': 'Main Beach',
+        'latitude': -34.0507,
+        'longitude': 24.9307,
+        'description': 'Chat for Main Beach visitors and locals',
+        'memberCount': 120,
+      },
+      {
+        'name': 'Supertubes Surf Spot',
+        'areaName': 'Supertubes',
+        'latitude': -34.0486,
+        'longitude': 24.9320,
+        'description': 'For surfers at the world-famous Supertubes',
+        'memberCount': 95,
+      },
+      {
+        'name': 'Marina Martinique',
+        'areaName': 'Marina',
+        'latitude': -34.0801,
+        'longitude': 24.9120,
+        'description': 'Marina residents and visitors chat',
+        'memberCount': 42,
+      },
+    ];
+
+    for (final roomData in chatRoomData) {
+      areaRooms.add(
+        AreaChatRoom(
+          id:
+              'area-${roomData['name'].toString().toLowerCase().replaceAll(' ', '-')}',
+          name: roomData['name'] as String,
+          memberIds: [],
+          areaName: roomData['areaName'] as String,
+          location: GeoPoint(
+            roomData['latitude'] as double,
+            roomData['longitude'] as double,
+          ),
+          radius: 3.0,
+          description: roomData['description'] as String,
+          isOfficial: true,
+          memberCount: roomData['memberCount'] as int,
+          isPublic: true,
+          creatorId: 'system',
+          createdAt: DateTime.now().subtract(
+            Duration(days: random.nextInt(60)),
+          ),
+        ),
+      );
+    }
+
+    return areaRooms;
   }
 }
