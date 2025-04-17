@@ -159,7 +159,7 @@ class _ContactsScreenState extends State<ContactsScreen>
                 )
                 : null,
         actions: [
-          if (!_isSearching)
+          if (!_isSearching) ...[
             IconButton(
               icon: const Icon(Icons.search),
               onPressed: () {
@@ -168,46 +168,45 @@ class _ContactsScreenState extends State<ContactsScreen>
                 });
               },
             ),
-          IconButton(
-            icon: const Icon(Icons.group_add),
-            onPressed: () {
-              _showCreateGroupDialog(context);
-            },
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              // Handle menu selection
-              if (value == 'addContact') {
+            // Add Contact button
+            IconButton(
+              icon: const Icon(Icons.person_add),
+              tooltip: 'Add Contact',
+              onPressed: () {
                 _showAddContactDialog(context);
-              } else if (value == 'invite') {
+              },
+            ),
+            // Invite Friends button
+            IconButton(
+              icon: const Icon(Icons.share),
+              tooltip: 'Invite Friends',
+              onPressed: () {
                 _navigateToInviteFriends(context);
-              }
-            },
-            itemBuilder:
-                (context) => [
-                  const PopupMenuItem(
-                    value: 'addContact',
-                    child: Row(
-                      children: [
-                        Icon(Icons.person_add, size: 20),
-                        SizedBox(width: 8),
-                        Text('Add Contact'),
-                      ],
+              },
+            ),
+            // More options menu
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                if (value == 'createGroup') {
+                  _showCreateGroupDialog(context);
+                }
+              },
+              itemBuilder:
+                  (context) => [
+                    const PopupMenuItem(
+                      value: 'createGroup',
+                      child: Row(
+                        children: [
+                          Icon(Icons.group_add, size: 20),
+                          SizedBox(width: 8),
+                          Text('Create Group'),
+                        ],
+                      ),
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'invite',
-                    child: Row(
-                      children: [
-                        Icon(Icons.share, size: 20),
-                        SizedBox(width: 8),
-                        Text('Invite Friends'),
-                      ],
-                    ),
-                  ),
-                ],
-          ),
+                  ],
+            ),
+          ],
         ],
         backgroundColor:
             isDarkMode ? AppColors.darkBackground : Colors.grey.shade100,
@@ -228,29 +227,12 @@ class _ContactsScreenState extends State<ContactsScreen>
         ),
         child: _isSearching ? _buildSearchResults() : _buildGroupedContacts(),
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Invite friends button
-          FloatingActionButton.small(
-            heroTag: 'inviteFriendsBtn',
-            onPressed: () {
-              _navigateToInviteFriends(context);
-            },
-            backgroundColor: AppColors.primaryGreen,
-            child: const Icon(Icons.share),
-          ),
-          const SizedBox(height: 16),
-          // Add contact button
-          FloatingActionButton(
-            heroTag: 'addContactBtn',
-            onPressed: () {
-              _showAddContactDialog(context);
-            },
-            backgroundColor: AppColors.primaryBlue,
-            child: const Icon(Icons.person_add),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          _showAddContactDialog(context);
+        },
+        backgroundColor: AppColors.primaryBlue,
+        child: const Icon(Icons.person_add),
       ),
     );
   }
