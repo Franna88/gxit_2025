@@ -6,6 +6,7 @@ import '../widgets/important_message_card.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/contact_item.dart';
 import '../widgets/horizontal_chat_room_card.dart';
+import '../widgets/area_chat_room_section.dart';
 import 'contacts_screen.dart';
 import 'chat_screen.dart';
 import 'chats_screen.dart';
@@ -241,73 +242,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   // Section header with neon effect
                   _buildSectionHeader('Chat Rooms'),
 
-                  // Chat Rooms List with neon glow
+                  // Area Chat Rooms Section
                   SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 160,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        children: [
-                          HorizontalChatRoomCard(
-                            name: 'Photography Lovers',
-                            lastMessage:
-                                'Emma: Check out my new portrait shots!',
-                            lastActivity: DateTime.now().subtract(
-                              const Duration(minutes: 5),
-                            ),
-                            memberCount: 126,
-                            hasUnreadMessages: true,
-                            unreadCount: 3,
-                            onTap:
-                                () => _navigateToChat(
-                                  context,
-                                  'Photography Lovers',
-                                ),
-                          ),
-                          HorizontalChatRoomCard(
-                            name: 'Music Festival',
-                            lastMessage:
-                                "Alex: Who's going to Coachella this year?",
-                            lastActivity: DateTime.now().subtract(
-                              const Duration(hours: 1),
-                            ),
-                            memberCount: 84,
-                            hasUnreadMessages: true,
-                            unreadCount: 5,
-                            onTap:
-                                () =>
-                                    _navigateToChat(context, 'Music Festival'),
-                          ),
-                          HorizontalChatRoomCard(
-                            name: 'Travel Adventures',
-                            lastMessage:
-                                'Rachel: Just booked my flight to Thailand!',
-                            lastActivity: DateTime.now().subtract(
-                              const Duration(hours: 6),
-                            ),
-                            memberCount: 53,
-                            hasUnreadMessages: false,
-                            onTap:
-                                () => _navigateToChat(
-                                  context,
-                                  'Travel Adventures',
-                                ),
-                          ),
-                          HorizontalChatRoomCard(
-                            name: 'Gaming Squad',
-                            lastMessage:
-                                'Michael: Anyone up for Fortnite tonight?',
-                            lastActivity: DateTime.now().subtract(
-                              const Duration(days: 1),
-                            ),
-                            memberCount: 98,
-                            hasUnreadMessages: false,
-                            onTap:
-                                () => _navigateToChat(context, 'Gaming Squad'),
-                          ),
-                        ],
-                      ),
+                    child: AreaChatRoomSection(
+                      onRoomTap: (name) => _navigateToChat(context, name),
                     ),
                   ),
 
