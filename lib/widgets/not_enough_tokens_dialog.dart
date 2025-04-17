@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
+import '../screens/token_purchase_screen.dart';
 
 class NotEnoughTokensDialog extends StatelessWidget {
   final int requiredTokens;
@@ -141,6 +142,14 @@ class NotEnoughTokensDialog extends StatelessWidget {
                 ElevatedButton(
                   onPressed: () {
                     Navigator.of(context).pop();
+                    // Navigate to token purchase screen
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const TokenPurchaseScreen(),
+                      ),
+                    );
+
+                    // Call the optional callback if provided
                     if (onBuyTokens != null) {
                       onBuyTokens!();
                     }

@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
 import '../services/chat_service.dart';
+import '../screens/token_purchase_screen.dart';
 
 class TokenBalance extends StatefulWidget {
   final bool showLabel;
   final bool isCompact;
+  final bool showAddButton;
 
-  const TokenBalance({Key? key, this.showLabel = true, this.isCompact = false})
-    : super(key: key);
+  const TokenBalance({
+    Key? key,
+    this.showLabel = true,
+    this.isCompact = false,
+    this.showAddButton = true,
+  }) : super(key: key);
 
   @override
   State<TokenBalance> createState() => _TokenBalanceState();
@@ -59,6 +65,16 @@ class _TokenBalanceState extends State<TokenBalance>
         _isLoading = false;
       });
     }
+  }
+
+  void _navigateToTokenPurchase(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TokenPurchaseScreen()),
+    ).then((_) {
+      // Refresh token balance when returning from purchase screen
+      _loadTokenBalance();
+    });
   }
 
   @override
@@ -129,6 +145,42 @@ class _TokenBalanceState extends State<TokenBalance>
                 Text(
                   'Tokens',
                   style: TextStyle(color: Colors.grey.shade300, fontSize: 14),
+                ),
+              ],
+              if (widget.showAddButton) ...[
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => _navigateToTokenPurchase(context),
+                  child: Container(
+                    width: widget.isCompact ? 20 : 24,
+                    height: widget.isCompact ? 20 : 24,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.primaryGreen.withOpacity(
+                        0.3 * pulseValue,
+                      ),
+                      border: Border.all(
+                        color: AppColors.primaryGreen.withOpacity(
+                          0.6 * pulseValue,
+                        ),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryGreen.withOpacity(
+                            0.2 * pulseValue,
+                          ),
+                          blurRadius: 4 * pulseValue,
+                          spreadRadius: 1 * pulseValue,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.add,
+                      color: Colors.white,
+                      size: widget.isCompact ? 14 : 16,
+                    ),
+                  ),
                 ),
               ],
             ],

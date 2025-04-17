@@ -170,6 +170,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           context: context,
           requiredTokens: 1,
           currentTokens: tokenBalance,
+          onBuyTokens: () {
+            // This will be called after the user clicks "Get More Tokens"
+            // The actual navigation happens in the NotEnoughTokensDialog
+            // We just need to refresh the token balance when they come back
+            _refreshAfterTokenPurchase();
+          },
         );
       }
       return;
@@ -233,6 +239,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         });
       }
     });
+  }
+
+  void _refreshAfterTokenPurchase() async {
+    // After user returns from token purchase, check balance again
+    final chatService = ChatService();
+    final tokenBalance = await chatService.getUserTokenBalance();
+
+    // Update the token balance in the UI
+    if (mounted) {
+      setState(() {
+        // The TokenBalance widget will automatically update
+      });
+    }
   }
 
   void _changeMood(UserMood newMood) {

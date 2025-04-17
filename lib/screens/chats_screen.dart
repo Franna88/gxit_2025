@@ -551,6 +551,13 @@ class _ChatsScreenState extends State<ChatsScreen>
                 context: context,
                 requiredTokens: 100,
                 currentTokens: tokenBalance,
+                onBuyTokens: () {
+                  // This will be called after the user navigates back from token purchase
+                  // We refresh the UI when they return
+                  setState(() {
+                    // The UI will refresh
+                  });
+                },
               );
               return;
             }

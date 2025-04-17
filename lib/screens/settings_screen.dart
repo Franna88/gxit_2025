@@ -7,6 +7,7 @@ import '../services/user_service.dart';
 import '../models/user_model.dart';
 import '../widgets/token_balance.dart';
 import 'login_screen.dart';
+import 'token_purchase_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -468,6 +469,19 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
 
                   _buildSectionHeader('General'),
+
+                  _buildSettingOption(
+                    title: 'Purchase Tokens',
+                    icon: Icons.token,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TokenPurchaseScreen(),
+                        ),
+                      );
+                    },
+                  ),
 
                   _buildSettingOption(
                     title: 'Display & Accessibility',
