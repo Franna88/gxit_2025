@@ -5,6 +5,9 @@ import '../widgets/message_bubble.dart';
 import '../models/user_mood.dart';
 import '../widgets/mood_visualizer.dart';
 import '../widgets/mood_wave.dart';
+import '../services/chat_service.dart';
+import '../widgets/token_balance.dart';
+import '../widgets/not_enough_tokens_dialog.dart';
 
 class ChatScreen extends StatefulWidget {
   final String contactName;
@@ -154,26 +157,61 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     ]);
   }
 
-  void _sendMessage() {
+  void _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
-    setState(() {
-      _messages.add(
-        Message(
-          content: _messageController.text.trim(),
-          timestamp: DateTime.now(),
-          isMe: true,
-          senderName: 'Me',
-          mood: _currentMood,
-        ),
+    final chatService = ChatService();
+    final tokenBalance = await chatService.getUserTokenBalance();
+
+    // Check if user has enough tokens
+    if (tokenBalance < 1) {
+      if (mounted) {
+        NotEnoughTokensDialog.show(
+          context: context,
+          requiredTokens: 1,
+          currentTokens: tokenBalance,
+        );
+      }
+      return;
+    }
+
+    // Try to send message with token
+    try {
+      final content = _messageController.text.trim();
+      final success = await chatService.sendMessage(
+        chatRoomId: 'demoRoom', // In a real app, use actual chatRoomId
+        content: content,
+        mood: _currentMood.type,
       );
-      _messageController.clear();
 
-      // Increase chat activity when new message is sent
-      _chatActivityLevel = math.min(1.0, _chatActivityLevel + 0.2);
-    });
+      if (success) {
+        setState(() {
+          _messages.add(
+            Message(
+              content: content,
+              timestamp: DateTime.now(),
+              isMe: true,
+              senderName: 'Me',
+              mood: _currentMood,
+            ),
+          );
+          _messageController.clear();
 
-    // Simulate response for demo purposes
+          // Increase chat activity when new message is sent
+          _chatActivityLevel = math.min(1.0, _chatActivityLevel + 0.2);
+        });
+
+        // Simulate response for demo purposes
+        _simulateResponse();
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error sending message: ${e.toString()}')),
+      );
+    }
+  }
+
+  void _simulateResponse() {
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
@@ -456,23 +494,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+        elevation: 0,
+        title: Row(
           children: [
-            Text(
-              widget.contactName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            if (_participants.containsKey(widget.contactName))
-              Text(
-                _participants[widget.contactName]!.shortDescription,
-                style: const TextStyle(fontSize: 12),
-              ),
+            const Icon(Icons.person),
+            const SizedBox(width: 8),
+            Text(widget.contactName),
+            const Spacer(),
+            // Add token balance in the AppBar
+            const TokenBalance(isCompact: true, showLabel: false),
           ],
         ),
-        backgroundColor:
-            isDarkMode ? AppColors.darkBackground : Colors.grey.shade100,
-        elevation: 0,
         actions: [
           _buildActivityIndicator(),
           const SizedBox(width: 8),

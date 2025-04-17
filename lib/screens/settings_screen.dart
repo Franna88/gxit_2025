@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import '../constants.dart';
 import '../services/user_service.dart';
 import '../models/user_model.dart';
+import '../widgets/token_balance.dart';
 import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -420,6 +421,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                                     letterSpacing: 0.5,
                                   ),
                                 ),
+                                const SizedBox(height: 12),
+                                // Add Token Balance
+                                const TokenBalance(),
                                 const SizedBox(height: 8),
                                 Text(
                                   "ACTIVE STATUS: ONLINE",

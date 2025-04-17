@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
 import '../widgets/chat_room_card.dart';
+import '../services/chat_service.dart';
+import '../widgets/not_enough_tokens_dialog.dart';
+import '../widgets/token_balance.dart';
 import 'chat_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
@@ -93,6 +96,18 @@ class _ChatsScreenState extends State<ChatsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Chat Rooms'),
+        backgroundColor: const Color(0xFF1A1A2E),
+        elevation: 0,
+        actions: [
+          // Add token balance in the AppBar
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: TokenBalance(isCompact: true, showLabel: false),
+          ),
+        ],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -526,8 +541,22 @@ class _ChatsScreenState extends State<ChatsScreen>
         final pulseValue = _pulseAnimation.value;
 
         return GestureDetector(
-          onTap: () {
-            // Show dialog to create a new room (implementation would go here)
+          onTap: () async {
+            // Check if user has enough tokens to create a room
+            final chatService = ChatService();
+            final tokenBalance = await chatService.getUserTokenBalance();
+
+            if (tokenBalance < 100) {
+              NotEnoughTokensDialog.show(
+                context: context,
+                requiredTokens: 100,
+                currentTokens: tokenBalance,
+              );
+              return;
+            }
+
+            // Show dialog to create a new room
+            _showCreateRoomDialog(context);
           },
           child: Container(
             decoration: BoxDecoration(
@@ -554,94 +583,188 @@ class _ChatsScreenState extends State<ChatsScreen>
               ],
             ),
             padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Row(
               children: [
-                // Plus icon with glow
                 Container(
-                  height: 60,
-                  width: 60,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.transparent,
+                    color: Colors.black.withOpacity(0.2),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.2 + (0.1 * pulseValue)),
-                      width: 2,
+                      color: AppColors.primaryBlue.withOpacity(
+                        0.3 + (0.2 * pulseValue),
+                      ),
+                      width: 1,
                     ),
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.primaryBlue.withOpacity(
                           0.2 * pulseValue,
                         ),
-                        blurRadius: 10 * pulseValue,
+                        blurRadius: 8 * pulseValue,
                         spreadRadius: 1 * pulseValue,
                       ),
                     ],
                   ),
                   child: Icon(
                     Icons.add,
-                    color: Colors.white.withOpacity(0.8 + (0.2 * pulseValue)),
-                    size: 30,
+                    color: AppColors.primaryBlue.withOpacity(
+                      0.7 + (0.3 * pulseValue),
+                    ),
                   ),
                 ),
-
-                const SizedBox(height: 16),
-
-                // Text with neon glow
+                const SizedBox(width: 16),
                 Text(
-                  'CREATE YOUR OWN',
-                  textAlign: TextAlign.center,
+                  'Create New Room',
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1.0,
-                    shadows: [
-                      Shadow(
+                    color: Colors.white.withOpacity(0.9),
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const Spacer(),
+                // Show the token cost
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withOpacity(
+                      0.1 + (0.05 * pulseValue),
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.primaryBlue.withOpacity(
+                        0.3 + (0.1 * pulseValue),
+                      ),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.token,
+                        size: 14,
                         color: AppColors.primaryBlue.withOpacity(
-                          0.5 * pulseValue,
+                          0.7 + (0.3 * pulseValue),
                         ),
-                        blurRadius: 5 * pulseValue,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '100',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.9),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  'COMMUNITY',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1.0,
-                    shadows: [
-                      Shadow(
-                        color: AppColors.primaryBlue.withOpacity(
-                          0.5 * pulseValue,
-                        ),
-                        blurRadius: 5 * pulseValue,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Subtitle with invitation
-                Text(
-                  'Find your tribe or build your own space',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
                 ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  void _showCreateRoomDialog(BuildContext context) {
+    final TextEditingController nameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A2E),
+            title: const Text(
+              'Create New Chat Room',
+              style: TextStyle(color: Colors.white),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Room Name',
+                    labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white30),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primaryBlue),
+                    ),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: AppColors.primaryBlue,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'This will cost 100 tokens',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                ),
+                onPressed: () async {
+                  if (nameController.text.trim().isEmpty) return;
+
+                  final chatService = ChatService();
+                  try {
+                    final roomId = await chatService.createChatRoom(
+                      name: nameController.text.trim(),
+                      memberIds: [],
+                    );
+
+                    if (roomId != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Chat room created successfully!'),
+                          backgroundColor: AppColors.primaryGreen,
+                        ),
+                      );
+                    }
+                    Navigator.pop(context);
+                  } catch (e) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Create'),
+              ),
+            ],
+          ),
     );
   }
 

@@ -64,6 +64,7 @@ class UserService {
       'email': email,
       'createdAt': FieldValue.serverTimestamp(),
       'lastLogin': FieldValue.serverTimestamp(),
+      'tokens': 500, // Initialize with 500 tokens
     });
   }
 
@@ -105,6 +106,47 @@ class UserService {
     } else {
       // User exists, just update the login timestamp
       await updateLastLogin(userId);
+    }
+  }
+
+  // Get user tokens
+  Future<int> getUserTokens(String userId) async {
+    final user = await getUser(userId);
+    return user?.tokens ?? 0;
+  }
+
+  // Check if user has enough tokens
+  Future<bool> hasEnoughTokens(String userId, int requiredTokens) async {
+    final userTokens = await getUserTokens(userId);
+    return userTokens >= requiredTokens;
+  }
+
+  // Use tokens for an action
+  Future<bool> useTokens(String userId, int tokenAmount) async {
+    // First check if user has enough tokens
+    final hasTokens = await hasEnoughTokens(userId, tokenAmount);
+    if (!hasTokens) {
+      return false;
+    }
+
+    // Get current token count
+    final user = await getUser(userId);
+    if (user == null) {
+      return false;
+    }
+
+    // Update tokens
+    final newTokenCount = user.tokens - tokenAmount;
+    await getUserRef(userId).update({'tokens': newTokenCount});
+    return true;
+  }
+
+  // Add tokens to user
+  Future<void> addTokens(String userId, int tokenAmount) async {
+    final user = await getUser(userId);
+    if (user != null) {
+      final newTokenCount = user.tokens + tokenAmount;
+      await getUserRef(userId).update({'tokens': newTokenCount});
     }
   }
 

@@ -6,6 +6,7 @@ class UserModel {
   final String email;
   final DateTime? createdAt;
   final DateTime? lastLogin;
+  final int tokens;
 
   UserModel({
     required this.id,
@@ -13,6 +14,7 @@ class UserModel {
     required this.email,
     this.createdAt,
     this.lastLogin,
+    this.tokens = 500,
   });
 
   // Create from Firestore document
@@ -29,6 +31,7 @@ class UserModel {
       email: data['email'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       lastLogin: (data['lastLogin'] as Timestamp?)?.toDate(),
+      tokens: data['tokens'] ?? 500,
     );
   }
 
@@ -45,17 +48,24 @@ class UserModel {
           lastLogin != null
               ? Timestamp.fromDate(lastLogin!)
               : FieldValue.serverTimestamp(),
+      'tokens': tokens,
     };
   }
 
   // Create updated user model
-  UserModel copyWith({String? name, String? email, DateTime? lastLogin}) {
+  UserModel copyWith({
+    String? name,
+    String? email,
+    DateTime? lastLogin,
+    int? tokens,
+  }) {
     return UserModel(
       id: id,
       name: name ?? this.name,
       email: email ?? this.email,
       createdAt: createdAt,
       lastLogin: lastLogin ?? this.lastLogin,
+      tokens: tokens ?? this.tokens,
     );
   }
 }
