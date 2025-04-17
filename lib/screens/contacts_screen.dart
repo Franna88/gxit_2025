@@ -4,6 +4,7 @@ import '../widgets/contact_item.dart';
 import '../widgets/contact_group_header.dart';
 import '../models/contact.dart';
 import 'chat_screen.dart';
+import 'contact_invitation_screen.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -179,6 +180,8 @@ class _ContactsScreenState extends State<ContactsScreen>
               // Handle menu selection
               if (value == 'addContact') {
                 _showAddContactDialog(context);
+              } else if (value == 'invite') {
+                _navigateToInviteFriends(context);
               }
             },
             itemBuilder:
@@ -225,12 +228,29 @@ class _ContactsScreenState extends State<ContactsScreen>
         ),
         child: _isSearching ? _buildSearchResults() : _buildGroupedContacts(),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          _showAddContactDialog(context);
-        },
-        backgroundColor: AppColors.primaryBlue,
-        child: const Icon(Icons.person_add),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Invite friends button
+          FloatingActionButton.small(
+            heroTag: 'inviteFriendsBtn',
+            onPressed: () {
+              _navigateToInviteFriends(context);
+            },
+            backgroundColor: AppColors.primaryGreen,
+            child: const Icon(Icons.share),
+          ),
+          const SizedBox(height: 16),
+          // Add contact button
+          FloatingActionButton(
+            heroTag: 'addContactBtn',
+            onPressed: () {
+              _showAddContactDialog(context);
+            },
+            backgroundColor: AppColors.primaryBlue,
+            child: const Icon(Icons.person_add),
+          ),
+        ],
       ),
     );
   }
@@ -430,5 +450,12 @@ class _ContactsScreenState extends State<ContactsScreen>
       _contactGroups[group]!.add(newContact);
       _allContacts.add(newContact);
     });
+  }
+
+  void _navigateToInviteFriends(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ContactInvitationScreen()),
+    );
   }
 }
