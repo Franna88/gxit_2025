@@ -55,16 +55,18 @@ class UserService {
 
   // Create new user in Firestore
   Future<void> createUser({
-    required String userId,
+    required String id,
     required String name,
     required String email,
+    bool isSystemBot = false,
   }) async {
-    await getUserRef(userId).set({
+    await getUserRef(id).set({
       'name': name,
       'email': email,
       'createdAt': FieldValue.serverTimestamp(),
       'lastLogin': FieldValue.serverTimestamp(),
       'tokens': 500, // Initialize with 500 tokens
+      'isSystemBot': isSystemBot,
     });
   }
 
@@ -99,7 +101,7 @@ class UserService {
     if (!userDoc.exists) {
       // User doesn't exist in Firestore, create a new record
       await createUser(
-        userId: userId,
+        id: userId,
         name: firebaseUser.displayName ?? 'User',
         email: firebaseUser.email ?? '',
       );
@@ -276,6 +278,22 @@ class UserService {
     } catch (e) {
       print('Error searching users: $e');
       return [];
+    }
+  }
+
+  // Ensure the system bot user exists in Firestore
+  Future<void> ensureSystemBotExists() async {
+    final systemBotId = 'system_bot';
+    final userDoc = await getUserRef(systemBotId).get();
+
+    if (!userDoc.exists) {
+      // Create the system bot user
+      await createUser(
+        id: systemBotId,
+        name: 'Chat Bot',
+        email: 'system@gxit.app',
+        isSystemBot: true,
+      );
     }
   }
 }

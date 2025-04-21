@@ -7,6 +7,7 @@ import '../widgets/activity_card.dart';
 import '../widgets/contact_item.dart';
 import '../widgets/horizontal_chat_room_card.dart';
 import '../widgets/area_chat_room_section.dart';
+import '../widgets/popup_chat_section.dart';
 import 'contacts_screen.dart';
 import 'chat_screen.dart';
 import 'chats_screen.dart';
@@ -249,6 +250,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   SliverToBoxAdapter(
                     child: AreaChatRoomSection(
                       onRoomTap: (name) => _navigateToChat(context, name),
+                    ),
+                  ),
+
+                  // Daily Popup Chat Topics Section
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 16.0),
+                      child: PopupChatSection(),
                     ),
                   ),
 

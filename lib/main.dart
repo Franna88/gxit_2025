@@ -6,11 +6,15 @@ import 'firebase_options.dart';
 import 'theme.dart';
 import 'services/user_service.dart';
 import 'services/app_startup_service.dart';
+import 'services/lifecycle_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
 // Initialize a global instance that can be accessed from anywhere
 final appStartupService = AppStartupService();
+
+// Initialize lifecycle service
+late final LifecycleService lifecycleService;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +24,14 @@ void main() async {
 
   // Initialize app startup services
   await appStartupService.initialize();
+
+  // Setup lifecycle service
+  lifecycleService = LifecycleService(
+    onAppClosed: () {
+      // Clean up resources when app is closed
+      appStartupService.dispose();
+    },
+  );
 
   // Force dark status bar
   SystemChrome.setSystemUIOverlayStyle(

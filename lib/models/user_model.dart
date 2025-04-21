@@ -7,6 +7,7 @@ class UserModel {
   final DateTime? createdAt;
   final DateTime? lastLogin;
   final int tokens;
+  final bool isSystemBot;
 
   UserModel({
     required this.id,
@@ -15,6 +16,7 @@ class UserModel {
     this.createdAt,
     this.lastLogin,
     this.tokens = 500,
+    this.isSystemBot = false,
   });
 
   // Create from Firestore document
@@ -32,6 +34,7 @@ class UserModel {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       lastLogin: (data['lastLogin'] as Timestamp?)?.toDate(),
       tokens: data['tokens'] ?? 500,
+      isSystemBot: data['isSystemBot'] ?? false,
     );
   }
 
@@ -49,6 +52,7 @@ class UserModel {
               ? Timestamp.fromDate(lastLogin!)
               : FieldValue.serverTimestamp(),
       'tokens': tokens,
+      'isSystemBot': isSystemBot,
     };
   }
 
@@ -58,6 +62,7 @@ class UserModel {
     String? email,
     DateTime? lastLogin,
     int? tokens,
+    bool? isSystemBot,
   }) {
     return UserModel(
       id: id,
@@ -66,6 +71,7 @@ class UserModel {
       createdAt: createdAt,
       lastLogin: lastLogin ?? this.lastLogin,
       tokens: tokens ?? this.tokens,
+      isSystemBot: isSystemBot ?? this.isSystemBot,
     );
   }
 }

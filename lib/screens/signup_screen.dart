@@ -132,7 +132,7 @@ class _SignupScreenState extends State<SignupScreen>
       // Create user in Firestore using UserService
       final userService = UserService();
       await userService.createUser(
-        userId: userCredential.user!.uid,
+        id: userCredential.user!.uid,
         name: name,
         email: email,
       );
