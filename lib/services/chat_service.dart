@@ -4,6 +4,8 @@ import '../models/chat_room.dart';
 import '../models/chat_message.dart';
 import '../models/user_model.dart';
 import '../models/user_mood.dart';
+import '../models/chat_invitation.dart';
+import '../models/notification_model.dart';
 import 'user_service.dart';
 
 class ChatService {
@@ -125,6 +127,21 @@ class ChatService {
       if (chatRoomId == 'demoRoom') {
         print('Demo room detected - bypassing Firebase operations');
         return true;
+      }
+
+      // Check if the room exists and is not closed
+      final roomDoc = await getChatRoomRef(chatRoomId).get();
+      if (!roomDoc.exists) {
+        throw Exception('Chat room does not exist');
+      }
+
+      final room = ChatRoom.fromFirestore(roomDoc);
+
+      // Check if the room is closed
+      if (room.isClosed) {
+        throw Exception(
+          'This chat room has been closed and no longer accepts messages',
+        );
       }
 
       // Check if user has enough tokens for sending a message
@@ -272,6 +289,78 @@ class ChatService {
     }
   }
 
+  // Find or create a private chat room between the current user and another user
+  Future<String?> findOrCreatePrivateChatRoom({
+    required String otherUserId,
+    required String otherUserName,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) return null;
+
+    try {
+      // First check if a chat room already exists between these users
+      final existingRoomsQuery =
+          await _roomsCollection
+              .where('memberIds', arrayContains: userId)
+              .where('isPublic', isEqualTo: false)
+              .get();
+
+      // Look for a room that contains exactly these two users
+      for (var doc in existingRoomsQuery.docs) {
+        final room = ChatRoom.fromFirestore(doc);
+        if (room.memberIds.length == 2 &&
+            room.memberIds.contains(otherUserId) &&
+            room.memberIds.contains(userId)) {
+          return room.id;
+        }
+      }
+
+      // If no room exists, create a new one
+      // Check if user has enough tokens for creating a room
+      final hasTokens = await _userService.hasEnoughTokens(
+        userId,
+        ChatRoom.createRoomTokenCost,
+      );
+
+      if (!hasTokens) {
+        throw Exception('Not enough tokens to create a chat room');
+      }
+
+      // Get current user's name
+      final currentUser = await _userService.getUser(userId);
+      if (currentUser == null) return null;
+
+      // Deduct tokens from user
+      final tokenUsed = await _userService.useTokens(
+        userId,
+        ChatRoom.createRoomTokenCost,
+      );
+
+      if (!tokenUsed) {
+        return null;
+      }
+
+      // Create room name from both users
+      final roomName = "${currentUser.name} & $otherUserName";
+
+      // Create the private chat room
+      final docRef = await _roomsCollection.add({
+        'name': roomName,
+        'memberIds': [userId, otherUserId],
+        'memberCount': 2,
+        'creatorId': userId,
+        'isPublic': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastActivity': FieldValue.serverTimestamp(),
+      });
+
+      return docRef.id;
+    } catch (e) {
+      print('Error finding or creating private chat room: $e');
+      return null;
+    }
+  }
+
   // Create a new area chat room
   Future<String?> createAreaChatRoom({
     required String name,
@@ -330,5 +419,322 @@ class ChatService {
     });
 
     return docRef.id;
+  }
+
+  // Invite users to a chat room
+  Future<bool> inviteUsersToChatRoom({
+    required String roomId,
+    required List<String> userIds,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) return false;
+
+    try {
+      // Get the chat room to verify the current user is a member
+      final roomDoc = await getChatRoomRef(roomId).get();
+      if (!roomDoc.exists) return false;
+
+      final room = ChatRoom.fromFirestore(roomDoc);
+
+      // Verify current user is a member or creator
+      if (!room.memberIds.contains(userId)) {
+        throw Exception('You must be a member of the room to invite others');
+      }
+
+      // Create invitations for each user
+      final batch = _firestore.batch();
+      for (String inviteeId in userIds) {
+        // Skip if user is already a member
+        if (room.memberIds.contains(inviteeId)) continue;
+
+        // Create invitation document
+        final inviteRef = _firestore.collection('chatInvitations').doc();
+        batch.set(inviteRef, {
+          'roomId': roomId,
+          'inviterId': userId,
+          'inviteeId': inviteeId,
+          'roomName': room.name,
+          'createdAt': FieldValue.serverTimestamp(),
+          'status': 'pending', // pending, accepted, declined
+          'isPublic': room.isPublic,
+        });
+      }
+
+      await batch.commit();
+      return true;
+    } catch (e) {
+      print('Error inviting users to chat room: $e');
+      return false;
+    }
+  }
+
+  // Get chat room invitations for current user
+  Stream<List<Map<String, dynamic>>> getChatInvitationsStream() {
+    final userId = currentUserId;
+    if (userId == null) {
+      return Stream.value([]);
+    }
+
+    return _firestore
+        .collection('chatInvitations')
+        .where('inviteeId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {'id': doc.id, ...data};
+          }).toList();
+        });
+  }
+
+  // Get chat room invitations for current user - typed version
+  Stream<List<ChatInvitation>> getChatInvitations() {
+    final userId = currentUserId;
+    if (userId == null) {
+      return Stream.value([]);
+    }
+
+    return _firestore
+        .collection('chatInvitations')
+        .where('inviteeId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => ChatInvitation.fromFirestore(doc))
+              .toList();
+        });
+  }
+
+  // Accept a chat room invitation
+  Future<bool> acceptChatInvitation(String invitationId) async {
+    final userId = currentUserId;
+    if (userId == null) return false;
+
+    try {
+      // Get the invitation
+      final inviteDoc =
+          await _firestore
+              .collection('chatInvitations')
+              .doc(invitationId)
+              .get();
+      if (!inviteDoc.exists) return false;
+
+      final inviteData = inviteDoc.data() as Map<String, dynamic>;
+
+      // Verify the current user is the invitee
+      if (inviteData['inviteeId'] != userId) {
+        throw Exception('This invitation is not for you');
+      }
+
+      // Update invitation status
+      await _firestore.collection('chatInvitations').doc(invitationId).update({
+        'status': 'accepted',
+      });
+
+      // Add user to chat room
+      await joinChatRoom(inviteData['roomId']);
+
+      return true;
+    } catch (e) {
+      print('Error accepting chat invitation: $e');
+      return false;
+    }
+  }
+
+  // Decline a chat room invitation
+  Future<bool> declineChatInvitation(String invitationId) async {
+    final userId = currentUserId;
+    if (userId == null) return false;
+
+    try {
+      // Get the invitation
+      final inviteDoc =
+          await _firestore
+              .collection('chatInvitations')
+              .doc(invitationId)
+              .get();
+      if (!inviteDoc.exists) return false;
+
+      final inviteData = inviteDoc.data() as Map<String, dynamic>;
+
+      // Verify the current user is the invitee
+      if (inviteData['inviteeId'] != userId) {
+        throw Exception('This invitation is not for you');
+      }
+
+      // Update invitation status
+      await _firestore.collection('chatInvitations').doc(invitationId).update({
+        'status': 'declined',
+      });
+
+      return true;
+    } catch (e) {
+      print('Error declining chat invitation: $e');
+      return false;
+    }
+  }
+
+  // Close a chat room (mark as closed and stop accepting new messages)
+  Future<bool> closeChatRoom(String roomId) async {
+    final userId = currentUserId;
+    if (userId == null) return false;
+
+    try {
+      // Get the room to check if the current user is the creator
+      final roomDoc = await getChatRoomRef(roomId).get();
+      if (!roomDoc.exists) return false;
+
+      final room = ChatRoom.fromFirestore(roomDoc);
+
+      // Only creator can close the room
+      if (room.creatorId != userId) {
+        throw Exception('Only the room creator can close this room');
+      }
+
+      // Mark the room as closed and set expiration
+      final expirationTime = DateTime.now().add(
+        const Duration(days: 7),
+      ); // Keep for 7 days then delete
+
+      await getChatRoomRef(roomId).update({
+        'isClosed': true,
+        'closedAt': FieldValue.serverTimestamp(),
+        'expiresAt': Timestamp.fromDate(expirationTime),
+        'closedBy': userId,
+      });
+
+      // Notify all members about room closure
+      final batch = _firestore.batch();
+      for (String memberId in room.memberIds) {
+        if (memberId == userId) continue; // Skip the creator
+
+        final notification = NotificationModel(
+          id: '', // Will be set by Firestore
+          userId: memberId,
+          type: NotificationType.roomClosed,
+          roomId: roomId,
+          roomName: room.name,
+          message:
+              'The chat room "${room.name}" has been closed by the creator.',
+          createdAt: DateTime.now(),
+          isRead: false,
+        );
+
+        final notificationRef = _firestore.collection('notifications').doc();
+        batch.set(notificationRef, notification.toMap());
+      }
+
+      await batch.commit();
+
+      return true;
+    } catch (e) {
+      print('Error closing chat room: $e');
+      return false;
+    }
+  }
+
+  // Schedule a task to clean up expired chat rooms
+  void setupChatRoomCleanup() {
+    // This would typically be done with a Firebase Cloud Function
+    // Here we are simulating checking for expired rooms when a user opens the app
+    _cleanupExpiredChatRooms();
+  }
+
+  // Clean up expired chat rooms
+  Future<void> _cleanupExpiredChatRooms() async {
+    try {
+      final now = DateTime.now();
+
+      // Find all closed rooms with expiration dates in the past
+      final expiredRoomsSnapshot =
+          await _roomsCollection
+              .where('isClosed', isEqualTo: true)
+              .where('expiresAt', isLessThan: Timestamp.fromDate(now))
+              .get();
+
+      if (expiredRoomsSnapshot.docs.isEmpty) return;
+
+      // Delete all expired rooms and their messages
+      final batch = _firestore.batch();
+
+      for (final doc in expiredRoomsSnapshot.docs) {
+        final roomId = doc.id;
+
+        // Delete all messages in the room
+        final messagesSnapshot =
+            await _messagesCollection
+                .where('chatRoomId', isEqualTo: roomId)
+                .get();
+
+        for (final messageDoc in messagesSnapshot.docs) {
+          batch.delete(messageDoc.reference);
+        }
+
+        // Delete the room itself
+        batch.delete(doc.reference);
+      }
+
+      await batch.commit();
+      print('Deleted ${expiredRoomsSnapshot.docs.length} expired chat rooms');
+    } catch (e) {
+      print('Error cleaning up expired chat rooms: $e');
+    }
+  }
+
+  // Get notifications for current user (including room closure notifications)
+  Stream<List<Map<String, dynamic>>> getNotificationsStream() {
+    final userId = currentUserId;
+    if (userId == null) {
+      return Stream.value([]);
+    }
+
+    return _firestore
+        .collection('notifications')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {'id': doc.id, ...data};
+          }).toList();
+        });
+  }
+
+  // Get notifications for current user - typed version
+  Stream<List<NotificationModel>> getNotifications() {
+    final userId = currentUserId;
+    if (userId == null) {
+      return Stream.value([]);
+    }
+
+    return _firestore
+        .collection('notifications')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => NotificationModel.fromFirestore(doc))
+              .toList();
+        });
+  }
+
+  // Mark a notification as read
+  Future<bool> markNotificationAsRead(String notificationId) async {
+    final userId = currentUserId;
+    if (userId == null) return false;
+
+    try {
+      await _firestore.collection('notifications').doc(notificationId).update({
+        'isRead': true,
+      });
+      return true;
+    } catch (e) {
+      print('Error marking notification as read: $e');
+      return false;
+    }
   }
 }

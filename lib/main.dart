@@ -5,14 +5,21 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'theme.dart';
 import 'services/user_service.dart';
+import 'services/app_startup_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+
+// Initialize a global instance that can be accessed from anywhere
+final appStartupService = AppStartupService();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize app startup services
+  await appStartupService.initialize();
 
   // Force dark status bar
   SystemChrome.setSystemUIOverlayStyle(

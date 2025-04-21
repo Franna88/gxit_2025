@@ -11,6 +11,10 @@ class ChatRoom {
   final bool isPublic;
   final String? creatorId;
   final DateTime createdAt;
+  final bool isClosed;
+  final DateTime? closedAt;
+  final DateTime? expiresAt;
+  final String? closedBy;
 
   // Token costs
   static const int messageTokenCost = 1;
@@ -27,6 +31,10 @@ class ChatRoom {
     this.isPublic = true,
     this.creatorId,
     DateTime? createdAt,
+    this.isClosed = false,
+    this.closedAt,
+    this.expiresAt,
+    this.closedBy,
   }) : createdAt = createdAt ?? DateTime.now();
 
   // Create from Firestore document
@@ -48,6 +56,10 @@ class ChatRoom {
       isPublic: data['isPublic'] ?? true,
       creatorId: data['creatorId'],
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      isClosed: data['isClosed'] ?? false,
+      closedAt: (data['closedAt'] as Timestamp?)?.toDate(),
+      expiresAt: (data['expiresAt'] as Timestamp?)?.toDate(),
+      closedBy: data['closedBy'],
     );
   }
 
@@ -66,11 +78,16 @@ class ChatRoom {
       'isPublic': isPublic,
       'creatorId': creatorId,
       'createdAt': Timestamp.fromDate(createdAt),
+      'isClosed': isClosed,
+      'closedAt': closedAt != null ? Timestamp.fromDate(closedAt!) : null,
+      'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt!) : null,
+      'closedBy': closedBy,
     };
   }
 
   // Create updated chat room
   ChatRoom copyWith({
+    String? id,
     String? name,
     List<String>? memberIds,
     String? lastMessage,
@@ -78,9 +95,15 @@ class ChatRoom {
     DateTime? lastActivity,
     int? memberCount,
     bool? isPublic,
+    String? creatorId,
+    DateTime? createdAt,
+    bool? isClosed,
+    DateTime? closedAt,
+    DateTime? expiresAt,
+    String? closedBy,
   }) {
     return ChatRoom(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       memberIds: memberIds ?? this.memberIds,
       lastMessage: lastMessage ?? this.lastMessage,
@@ -88,8 +111,12 @@ class ChatRoom {
       lastActivity: lastActivity ?? this.lastActivity,
       memberCount: memberCount ?? this.memberCount,
       isPublic: isPublic ?? this.isPublic,
-      creatorId: creatorId,
-      createdAt: createdAt,
+      creatorId: creatorId ?? this.creatorId,
+      createdAt: createdAt ?? this.createdAt,
+      isClosed: isClosed ?? this.isClosed,
+      closedAt: closedAt ?? this.closedAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+      closedBy: closedBy ?? this.closedBy,
     );
   }
 }

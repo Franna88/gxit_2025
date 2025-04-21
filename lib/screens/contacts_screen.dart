@@ -127,6 +127,21 @@ class _ContactsScreenState extends State<ContactsScreen>
                 .toList();
       }
     });
+
+    // If the query is 3 or more characters, search for users in Firestore
+    if (query.length >= 3) {
+      // Debounce to avoid too many requests
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (_searchController.text.trim() == query) {
+          _performSearch(query);
+        }
+      });
+    } else {
+      setState(() {
+        _isSearchingUsers = false;
+        _searchResults = [];
+      });
+    }
   }
 
   void _performSearch(String query) {
@@ -179,6 +194,7 @@ class _ContactsScreenState extends State<ContactsScreen>
                   style: TextStyle(
                     color: isDarkMode ? Colors.white : AppColors.darkText,
                   ),
+                  onSubmitted: _performSearch,
                 )
                 : const Text(
                   'Contacts',
@@ -263,7 +279,12 @@ class _ContactsScreenState extends State<ContactsScreen>
             ],
           ),
         ),
-        child: _isSearching ? _buildSearchResults() : _buildGroupedContacts(),
+        child:
+            _isSearchingUsers
+                ? _buildUserSearchResults()
+                : (_isSearching
+                    ? _buildSearchResults()
+                    : _buildGroupedContacts()),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -351,17 +372,49 @@ class _ContactsScreenState extends State<ContactsScreen>
     );
   }
 
-  void _navigateToChat(BuildContext context, String contactName) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder:
-            (context) => ChatScreen(
-              contactName: contactName,
-              chatRoomId: 'demoRoom', // Use demo room for now
+  void _navigateToChat(BuildContext context, String contactName) async {
+    // For now, we'll use demoRoom for sample contacts
+    // In a real app, we'd have real users associated with contacts
+
+    // Try to find a real user with this name - this is just a simple demo approach
+    // In a real app, you'd have proper contact-to-user mapping
+    try {
+      final userService = UserService();
+      final users = await userService.searchUsers(contactName);
+
+      if (users.isNotEmpty) {
+        // We found a real user, start a proper chat
+        await _startChatWithUser(users.first);
+      } else {
+        // No real user found, use demo room
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (context) => ChatScreen(
+                    contactName: contactName,
+                    chatRoomId: 'demoRoom',
+                  ),
             ),
-      ),
-    );
+          );
+        }
+      }
+    } catch (e) {
+      // On error, fall back to demo room
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder:
+                (context) => ChatScreen(
+                  contactName: contactName,
+                  chatRoomId: 'demoRoom',
+                ),
+          ),
+        );
+      }
+    }
   }
 
   void _showAddContactDialog(BuildContext context) {
@@ -527,10 +580,92 @@ class _ContactsScreenState extends State<ContactsScreen>
     }).toList();
   }
 
-  // Commented out due to missing dependencies
-  /*
   Future<void> _startChatWithUser(UserModel user) async {
-    // Implementation requires missing UserProvider, ChatRoomScreen, etc.
+    final chatService = ChatService();
+
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      // Find or create a private chat room
+      final chatRoomId = await chatService.findOrCreatePrivateChatRoom(
+        otherUserId: user.id,
+        otherUserName: user.name,
+      );
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      if (chatRoomId != null && mounted) {
+        // Navigate to chat screen with the room ID
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder:
+                (context) =>
+                    ChatScreen(contactName: user.name, chatRoomId: chatRoomId),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to create chat room. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if error occurs
+      if (mounted) {
+        Navigator.pop(context);
+
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString().split(': ').last}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
-  */
+
+  Widget _buildUserSearchResults() {
+    return _searchResults.isEmpty
+        ? Center(
+          child: Text(
+            'No matching users found',
+            style: TextStyle(
+              color:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.subtleText
+                      : Colors.grey.shade600,
+            ),
+          ),
+        )
+        : ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          itemCount: _searchResults.length,
+          itemBuilder: (context, index) {
+            final user = _searchResults[index];
+            return ContactItem(
+              contact: Contact(
+                id: user.id,
+                name: user.name,
+                address: "",
+                isFavorite: false,
+              ),
+              status: ContactStatus.online,
+              messageType: null,
+              onTap: () => _startChatWithUser(user),
+            );
+          },
+        );
+  }
 }

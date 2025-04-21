@@ -1,0 +1,26 @@
+# Firebase App Distribution configuration
+release_notes: |
+  Social Buzz Beta Testing Release
+  
+  What's new:
+  - Initial beta version
+  - User authentication with Firebase
+  - Contacts management
+  - Basic chat functionality
+  
+  Known issues:
+  - Some UI elements may not be fully responsive on all devices
+  - Chat history may not sync correctly in some cases
+  
+  Please report any issues you encounter to: support@socialbuzz.app
+
+# Define tester groups
+groups:
+  - internal-testers
+  - beta-testers
+
+# Testers who will receive email invitations
+testers:
+  # Add tester emails here
+  # - tester1@example.com
+  # - tester2@example.com 
