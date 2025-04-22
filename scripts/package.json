@@ -1,0 +1,9 @@
+{
+  "name": "play-store-upload",
+  "version": "1.0.0",
+  "description": "Upload APK/AAB to Google Play Store",
+  "main": "play-upload.js",
+  "dependencies": {
+    "googleapis": "^92.0.0"
+  }
+}

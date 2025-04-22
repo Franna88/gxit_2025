@@ -16,6 +16,21 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Function to extract version information from pubspec.yaml
+fun getVersionFromPubspec(field: String): String {
+    val pubspecFile = File(project.rootDir.parentFile, "pubspec.yaml")
+    val pubspecText = pubspecFile.readText()
+    val versionPattern = "version:\\s*([^\\s]+)".toRegex()
+    val versionMatch = versionPattern.find(pubspecText)
+    val fullVersion = versionMatch?.groupValues?.get(1) ?: "1.0.0+1"
+    
+    return when(field) {
+        "versionName" -> fullVersion.split("+")[0]
+        "versionCode" -> fullVersion.split("+").getOrElse(1) { "1" }
+        else -> ""
+    }
+}
+
 android {
     namespace = "com.example.gxit_2025"
     compileSdk = 35
@@ -34,8 +49,8 @@ android {
         applicationId = "com.gxit.app"
         minSdk = 23
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = getVersionFromPubspec("versionCode").toInt()
+        versionName = getVersionFromPubspec("versionName")
     }
 
     signingConfigs {
