@@ -68,6 +68,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final List<ChatMessage> _messages = [];
   final ChatService _chatService = ChatService();
   bool _isLoading = true;
+  bool _hasLoadedInitialMessages = false;
 
   String? _currentUserId;
 
@@ -175,12 +176,25 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         return;
       }
 
-      // Subscribe to the messages stream
+      // First check if there are any messages quickly
+      final initialMessages = await _chatService.getInitialMessages(widget.chatRoomId, 1);
+      
+      if (initialMessages.isEmpty) {
+        // No messages found, update UI immediately
+        setState(() {
+          _messages.clear();
+          _isLoading = false;
+        });
+      }
+
+      // Subscribe to the messages stream regardless
       _chatService.getChatMessagesStream(widget.chatRoomId).listen((messages) {
         if (mounted) {
           setState(() {
             _messages.clear();
-            _messages.addAll(messages);
+            if (messages.isNotEmpty) {
+              _messages.addAll(messages);
+            }
             _isLoading = false;
           });
         }
@@ -226,15 +240,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _loadInitialMessages() {
+  Future<void> _loadInitialMessages() async {
     // Sample messages for demo with moods and reactions
-    _messages.addAll([
+    final messages = [
       ChatMessage(
         id: '1',
         content: 'Hey, how are you doing?',
         senderId: 'demo_sender',
         senderName: widget.contactName,
-        chatRoomId: 'demoRoom',
+        chatRoomId: widget.chatRoomId,
         timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
         mood: MoodType.happy,
         reactions: ['👍', '❤️'],
@@ -244,7 +258,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         content: 'I\'m good, thanks! How about you?',
         senderId: _currentUserId ?? 'current_user',
         senderName: 'Me',
-        chatRoomId: 'demoRoom',
+        chatRoomId: widget.chatRoomId,
         timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 1)),
         mood: MoodType.happy,
       ),
@@ -253,7 +267,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         content: 'Just wanted to check if we\'re still on for tomorrow?',
         senderId: 'demo_sender',
         senderName: widget.contactName,
-        chatRoomId: 'demoRoom',
+        chatRoomId: widget.chatRoomId,
         timestamp: DateTime.now().subtract(const Duration(hours: 5)),
         mood: MoodType.happy,
       ),
@@ -262,12 +276,26 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         content: 'Yes, definitely! Looking forward to it!',
         senderId: _currentUserId ?? 'current_user',
         senderName: 'Me',
-        chatRoomId: 'demoRoom',
+        chatRoomId: widget.chatRoomId,
         timestamp: DateTime.now().subtract(const Duration(hours: 4)),
         mood: MoodType.excited,
         reactions: ['🎉'],
       ),
-    ]);
+    ];
+
+    // Add messages to local state
+    _messages.addAll(messages);
+
+    // Save messages to Firebase if this is not the demo room
+    if (widget.chatRoomId != 'demoRoom') {
+      for (final message in messages) {
+        await _chatService.sendMessage(
+          chatRoomId: widget.chatRoomId,
+          content: message.content,
+          mood: message.mood,
+        );
+      }
+    }
   }
 
   void _sendMessage() async {
@@ -438,29 +466,75 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
 
     if (_messages.isEmpty) {
+      final isDarkMode = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 48,
-              color: Colors.white.withOpacity(0.5),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDarkMode 
+                    ? Colors.blue.withOpacity(0.1) 
+                    : Colors.blue.withOpacity(0.05),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.chat_bubble_outline,
+                size: 64,
+                color: AppColors.primaryBlue.withOpacity(0.8),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Text(
               'No messages yet',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 16,
+                color: isDarkMode ? Colors.white : Colors.black87,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Start a conversation!',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 14,
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                'Be the first to say hello to ${widget.contactName}!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: () {
+                // Pre-fill a greeting message
+                _messageController.text = "Hello! 👋";
+                
+                // Focus the message input field
+                FocusScope.of(context).requestFocus(
+                  FocusNode()
+                );
+                
+                // Simulate button tap animation and give a hint to the user
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Message prepared. Tap send when ready!'),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: AppColors.primaryBlue,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.message),
+              label: const Text('START CONVERSATION'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
               ),
             ),
           ],
@@ -559,7 +633,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     child: TextField(
                       controller: _messageController,
                       decoration: InputDecoration(
-                        hintText: 'Type a message',
+                        hintText: _messages.isEmpty 
+                            ? 'Type "Hello" to start the conversation...' 
+                            : 'Type a message',
                         hintStyle: TextStyle(
                           color:
                               isDarkMode ? Colors.grey : Colors.grey.shade600,

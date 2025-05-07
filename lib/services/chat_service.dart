@@ -49,6 +49,24 @@ class ChatService {
         });
   }
 
+  // Get initial messages for a chat room (non-stream version for quick checks)
+  Future<List<ChatMessage>> getInitialMessages(String roomId, int limit) async {
+    try {
+      final snapshot = await _messagesCollection
+          .where('chatRoomId', isEqualTo: roomId)
+          .orderBy('timestamp', descending: true)
+          .limit(limit)
+          .get();
+          
+      return snapshot.docs
+          .map((doc) => ChatMessage.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print('Error getting initial messages: $e');
+      return [];
+    }
+  }
+
   // Get messages for a chat room
   Stream<List<ChatMessage>> getChatMessagesStream(String roomId) {
     return _messagesCollection
