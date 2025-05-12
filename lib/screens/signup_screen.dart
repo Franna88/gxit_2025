@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants.dart';
 import '../services/user_service.dart';
 import 'home_screen.dart';
+import 'self_description_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -138,11 +139,14 @@ class _SignupScreenState extends State<SignupScreen>
       );
 
       if (mounted) {
-        // User is already signed in after registration
-        // Navigate to home screen
+        // Navigate to self description screen
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          MaterialPageRoute(
+            builder: (context) => SelfDescriptionScreen(
+              userId: userCredential.user!.uid,
+            ),
+          ),
         );
       }
     } on FirebaseAuthException catch (e) {
