@@ -477,6 +477,39 @@ class LocationService {
     }
   }
 
+  // Get an area chat room by ID
+  Future<AreaChatRoom?> getAreaChatRoomById(String roomId) async {
+    try {
+      final doc = await _firestore.collection('areaChatRooms').doc(roomId).get();
+      if (doc.exists) {
+        return AreaChatRoom.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting area chat room by ID: $e');
+      return null;
+    }
+  }
+
+  // Get all public user-created area chat rooms (non-official)
+  Future<List<AreaChatRoom>> getPublicAreaChatRooms() async {
+    try {
+      final snapshot = await _firestore
+          .collection('areaChatRooms')
+          .where('isPublic', isEqualTo: true)
+          .where('isOfficial', isEqualTo: false)
+          .orderBy('createdAt', descending: true)
+          .get();
+          
+      return snapshot.docs
+          .map((doc) => AreaChatRoom.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting public area chat rooms: $e');
+      return [];
+    }
+  }
+
   // Generate official area chat rooms (fallback method)
   List<AreaChatRoom> _generateOfficialAreaChatRooms() {
     final random = Random();

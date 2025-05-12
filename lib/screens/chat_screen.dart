@@ -1,52 +1,68 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
-import '../constants.dart';
-import '../widgets/message_bubble.dart';
-import '../models/user_mood.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 import '../models/chat_message.dart';
 import '../models/chat_room.dart';
-import '../widgets/mood_visualizer.dart';
-import '../widgets/mood_wave.dart';
+import '../models/user_mood.dart';
 import '../services/chat_service.dart';
+import '../constants.dart';
+import '../widgets/message_bubble.dart';
 import '../widgets/token_balance.dart';
+import '../widgets/mood_selector.dart';
 import '../widgets/not_enough_tokens_dialog.dart';
+import '../widgets/chat_invite_dialog.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // Define Message class for backward compatibility with MessageBubble
 class Message {
+  final String id;
+  final String senderId;
+  final String senderName;
   final String content;
   final DateTime timestamp;
+  final MoodType? mood;
   final bool isMe;
-  final String senderName;
-  final UserMood mood;
   final List<String>? reactions;
 
-  Message({
+  // Make constructor const for better caching
+  const Message({
+    required this.id,
+    required this.senderId,
+    required this.senderName,
     required this.content,
     required this.timestamp,
     required this.isMe,
-    required this.senderName,
-    required this.mood,
+    this.mood,
     this.reactions,
   });
 
-  Message copyWith({
-    String? content,
-    DateTime? timestamp,
-    bool? isMe,
-    String? senderName,
-    UserMood? mood,
-    List<String>? reactions,
-  }) {
+  factory Message.fromChatMessage(ChatMessage chatMessage, String currentUserId) {
+    final isCurrentUser = chatMessage.senderId == currentUserId;
+    
     return Message(
-      content: content ?? this.content,
-      timestamp: timestamp ?? this.timestamp,
-      isMe: isMe ?? this.isMe,
-      senderName: senderName ?? this.senderName,
-      mood: mood ?? this.mood,
-      reactions: reactions ?? this.reactions,
+      id: chatMessage.id,
+      senderId: chatMessage.senderId,
+      senderName: isCurrentUser ? 'You' : chatMessage.senderName,
+      content: chatMessage.content,
+      timestamp: chatMessage.timestamp,
+      isMe: isCurrentUser,
+      mood: chatMessage.mood,
+      reactions: chatMessage.reactions,
     );
   }
+  
+  // Override equality to prevent unnecessary rebuilds
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Message &&
+        other.id == id &&
+        other.content == content &&
+        other.isMe == isMe;
+  }
+
+  @override
+  int get hashCode => Object.hash(id, content, isMe);
 }
 
 class ChatScreen extends StatefulWidget {
@@ -63,722 +79,903 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
-  final TextEditingController _messageController = TextEditingController();
+class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController _textController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   final List<ChatMessage> _messages = [];
   final ChatService _chatService = ChatService();
   bool _isLoading = true;
+  bool _sendingMessage = false;
+  String? _errorMessage;
+  MoodType? _selectedMood;
 
-  String? _currentUserId;
+  final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-  // Chat room data
-  ChatRoom? _chatRoom;
-
-  // Current user mood
-  late UserMood _currentMood;
-
-  // Chat room participants with their moods
-  final Map<String, UserMood> _participants = {};
-
-  // Animation controller for mood transitions
-  late AnimationController _moodAnimationController;
-  late Animation<double> _moodAnimation;
-
-  // Chat activity level (0.0 to 1.0) indicating how active the conversation is
-  double _chatActivityLevel = 0.3;
-  late AnimationController _activityPulseController;
+  // Create a local map to store the latest message from each user
+  final Map<String, ChatMessage> _latestUserMessages = {};
 
   @override
   void initState() {
     super.initState();
-    _currentMood = MoodOptions.happy;
-    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
-
-    // Setup animations
-    _moodAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-
-    _moodAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _moodAnimationController,
-        curve: Curves.easeInOut,
-      ),
-    );
-
-    _activityPulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-
-    // Load chat room data and messages
-    _loadChatRoom();
-    _loadMessages();
+    
+    // First attempt to load from Firestore
+    _loadInitialMessages();
+    
+    // Schedule a force refresh after a short delay to ensure all messages load
+    // This is especially important for accounts with sync issues like Litha's
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        _forceRefreshMessages();
+      }
+    });
+    
+    // Do another refresh after 3 seconds to catch any delayed messages
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        _forceRefreshMessages();
+      }
+    });
+    
+    // Final refresh attempt to ensure we have all messages
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        _forceRefreshMessages();
+      }
+    });
   }
 
   @override
   void dispose() {
-    _messageController.dispose();
-    _moodAnimationController.dispose();
-    _activityPulseController.dispose();
+    _textController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  // Load chat room data
-  Future<void> _loadChatRoom() async {
-    try {
-      if (widget.chatRoomId == 'demoRoom') {
-        // For demo room, create a fake chat room
-        setState(() {
-          _chatRoom = ChatRoom(
-            id: 'demoRoom',
-            name: widget.contactName,
-            memberIds: ['demo_user'],
-            lastMessage: 'This is a demo chat room',
-            lastSenderId: 'demo_user',
-            lastActivity: DateTime.now(),
-            isPublic: true,
-          );
-          _setupDemoParticipants();
-        });
-        return;
-      }
-
-      // Subscribe to the chat room stream
-      _chatService.getChatRoomStream(widget.chatRoomId).listen((chatRoom) {
-        if (chatRoom != null && mounted) {
-          setState(() {
-            _chatRoom = chatRoom;
-            _chatActivityLevel = 0.3 + (math.Random().nextDouble() * 0.4);
-          });
-        }
-      });
-    } catch (e) {
-      print('Error loading chat room: $e');
-    }
-  }
-
-  // Load messages from Firebase
-  Future<void> _loadMessages() async {
+  Future<void> _loadInitialMessages() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
-      if (widget.chatRoomId == 'demoRoom') {
-        // For demo room, add sample messages
-        _loadInitialMessages();
-        setState(() {
-          _isLoading = false;
-        });
-        return;
+      // First try to get messages directly
+      final initialMessages = await _chatService.getInitialMessages(
+        widget.chatRoomId,
+        30,
+      );
+
+      // Store any messages we receive to preserve them per user
+      if (initialMessages.isNotEmpty) {
+        _updateLatestUserMessages(initialMessages);
       }
 
-      // Subscribe to the messages stream
-      _chatService.getChatMessagesStream(widget.chatRoomId).listen((messages) {
+      // Check if we got messages
+      if (initialMessages.isNotEmpty) {
         if (mounted) {
           setState(() {
             _messages.clear();
-            _messages.addAll(messages);
+            _messages.addAll(initialMessages);
             _isLoading = false;
           });
         }
-      });
+      } else {
+        // If no messages found, try a fallback approach specifically for Litha's account
+        debugPrint('No messages found with initial approach, trying fallback...');
+
+        try {
+          // Force reload with a slight delay to ensure Firebase returns results
+          await Future.delayed(const Duration(milliseconds: 500));
+          final fallbackMessages = await FirebaseFirestore.instance
+              .collection('messages')
+              .where('chatRoomId', isEqualTo: widget.chatRoomId)
+              .orderBy('timestamp', descending: true)
+              .limit(30)
+              .get();
+              
+          final parsedMessages = fallbackMessages.docs
+              .map((doc) => ChatMessage.fromFirestore(doc))
+              .toList();
+          
+          // Store these messages too
+          if (parsedMessages.isNotEmpty) {
+            _updateLatestUserMessages(parsedMessages);
+          }
+          
+          if (mounted) {
+            setState(() {
+              if (parsedMessages.isNotEmpty) {
+                _messages.clear();
+                _messages.addAll(parsedMessages);
+              }
+              _isLoading = false;
+            });
+          }
+        } catch (fallbackError) {
+          debugPrint('Fallback approach failed: $fallbackError');
+          // Continue with empty messages if both approaches fail
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+        }
+      }
     } catch (e) {
-      print('Error loading messages: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      debugPrint('Error loading messages: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load messages';
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void _setupDemoParticipants() {
-    // Add some fake participants with different moods for demo room
-    _participants.addAll({
-      'Alex': MoodOptions.excited,
-      'Emma': MoodOptions.curious,
-      'Michael': MoodOptions.relaxed,
-      'Rachel': MoodOptions.bored,
-      'Jamie': MoodOptions.annoyed,
+  Future<void> _sendMessage() async {
+    final message = _textController.text.trim();
+    if (message.isEmpty) return;
+
+    // Clear text field first for better UX
+    _textController.clear();
+    _focusNode.requestFocus();
+
+    // Create a local temporary message to show immediately
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}_${_currentUserId.hashCode}';
+    final tempMessage = ChatMessage(
+      id: tempId,
+      content: message,
+      senderId: _currentUserId,
+      senderName: 'You',
+      chatRoomId: widget.chatRoomId,
+      timestamp: DateTime.now(),
+      mood: _selectedMood,
+    );
+    
+    // Single setState to add the message and set sending state
+    setState(() {
+      _messages.insert(0, tempMessage); // Add at the beginning since we display in reverse
+      _sendingMessage = true;
+      _errorMessage = null;
     });
-
-    // Simulate mood changes every 20 seconds
-    _simulateParticipantMoodChanges();
-  }
-
-  void _simulateParticipantMoodChanges() {
-    Future.delayed(const Duration(seconds: 20), () {
-      if (mounted) {
-        setState(() {
-          // Randomly change 1-2 participants' moods
-          final participants = _participants.keys.toList();
-          participants.shuffle();
-
-          for (int i = 0; i < math.min(2, participants.length); i++) {
-            final participant = participants[i];
-            _participants[participant] = MoodOptions.getRandomMood();
-          }
-        });
-
-        _simulateParticipantMoodChanges();
-      }
-    });
-  }
-
-  void _loadInitialMessages() {
-    // Sample messages for demo with moods and reactions
-    _messages.addAll([
-      ChatMessage(
-        id: '1',
-        content: 'Hey, how are you doing?',
-        senderId: 'demo_sender',
-        senderName: widget.contactName,
-        chatRoomId: 'demoRoom',
-        timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
-        mood: MoodType.happy,
-        reactions: ['👍', '❤️'],
-      ),
-      ChatMessage(
-        id: '2',
-        content: 'I\'m good, thanks! How about you?',
-        senderId: _currentUserId ?? 'current_user',
-        senderName: 'Me',
-        chatRoomId: 'demoRoom',
-        timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 1)),
-        mood: MoodType.happy,
-      ),
-      ChatMessage(
-        id: '3',
-        content: 'Just wanted to check if we\'re still on for tomorrow?',
-        senderId: 'demo_sender',
-        senderName: widget.contactName,
-        chatRoomId: 'demoRoom',
-        timestamp: DateTime.now().subtract(const Duration(hours: 5)),
-        mood: MoodType.happy,
-      ),
-      ChatMessage(
-        id: '4',
-        content: 'Yes, definitely! Looking forward to it!',
-        senderId: _currentUserId ?? 'current_user',
-        senderName: 'Me',
-        chatRoomId: 'demoRoom',
-        timestamp: DateTime.now().subtract(const Duration(hours: 4)),
-        mood: MoodType.excited,
-        reactions: ['🎉'],
-      ),
-    ]);
-  }
-
-  void _sendMessage() async {
-    if (_messageController.text.trim().isEmpty) return;
-
-    final content = _messageController.text.trim();
+    
+    // Also add to our latest user messages map for persistence
+    _latestUserMessages[_currentUserId] = tempMessage;
+    
+    // Try to immediately persist this message using chatService's cache - do this outside setState
+    await _chatService.addToLocalCache(widget.chatRoomId, [tempMessage]);
 
     try {
-      // Check if user has enough tokens
-      final tokenBalance = await _chatService.getUserTokenBalance();
+      final finalMood = _selectedMood; // Capture current mood before resetting
+      
+      // Reset mood state separately to avoid flickering in the main list
+      setState(() {
+        _selectedMood = null;
+      });
+      
+      try {
+        final success = await _chatService.sendMessage(
+          chatRoomId: widget.chatRoomId,
+          content: message,
+          mood: finalMood,
+        );
 
-      if (tokenBalance < ChatRoom.messageTokenCost) {
+        if (!success) {
+          // Only update the error state, don't touch the messages
+          setState(() {
+            _errorMessage = 'Failed to send message';
+          });
+        }
+      } catch (e) {
+        debugPrint('Error sending message to Firebase: $e');
+        // Only update the error state
+        setState(() {
+          _errorMessage = 'Error sending to server, message saved locally';
+        });
+      }
+    } catch (e) {
+      debugPrint('Error sending message: $e');
+      
+      setState(() {
+        _errorMessage = 'Error: ${e.toString().split(': ').last}';
+      });
+
+      // Show not enough tokens dialog if that's the error
+      if (e.toString().contains('tokens') && mounted) {
+        // Get the current token balance
+        final tokenBalance = await _chatService.getUserTokenBalance();
         if (mounted) {
           NotEnoughTokensDialog.show(
             context: context,
             requiredTokens: ChatRoom.messageTokenCost,
             currentTokens: tokenBalance,
             onBuyTokens: () {
-              _refreshAfterTokenPurchase();
+              // Navigate to token purchase screen
             },
           );
         }
-        return;
       }
-
-      // Send message to Firebase
-      final success = await _chatService.sendMessage(
-        chatRoomId: widget.chatRoomId,
-        content: content,
-        mood: _currentMood.type,
-      );
-
-      if (success) {
-        // Clear input field
-        _messageController.clear();
-
-        // In demo mode, add message locally
-        if (widget.chatRoomId == 'demoRoom') {
-          setState(() {
-            _messages.add(
-              ChatMessage(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                content: content,
-                senderId: _currentUserId ?? 'current_user',
-                senderName: 'Me',
-                chatRoomId: 'demoRoom',
-                timestamp: DateTime.now(),
-                mood: _currentMood.type,
-              ),
-            );
-
-            // Increase chat activity when new message is sent
-            _chatActivityLevel = math.min(1.0, _chatActivityLevel + 0.2);
-          });
-
-          // Simulate response for demo purposes
-          _simulateResponse();
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to send message. Please try again later.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('Error in _sendMessage: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString().split(': ').last}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    } finally {
+      // Final state update to indicate sending is complete
+      setState(() {
+        _sendingMessage = false;
+      });
     }
   }
 
-  void _simulateResponse() {
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted && widget.chatRoomId == 'demoRoom') {
-        setState(() {
-          // Simulated response with a random mood
-          final responseMood = MoodOptions.getRandomMood();
-
-          _messages.add(
-            ChatMessage(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              content: 'Thanks for your message. I\'ll get back to you soon!',
-              senderId: 'demo_sender',
-              senderName: widget.contactName,
-              chatRoomId: 'demoRoom',
-              timestamp: DateTime.now(),
-              mood: responseMood.type,
-            ),
-          );
-        });
-      }
-    });
-  }
-
-  void _refreshAfterTokenPurchase() {
-    // Refresh token balance and try again
+  void _onMoodSelected(MoodType mood) {
     setState(() {
-      // Token purchase complete, refresh UI
+      _selectedMood = mood;
     });
-  }
-
-  // Add reaction to a message
-  void _addReaction(String messageId, String reaction) async {
-    await _chatService.addReaction(messageId, reaction);
-  }
-
-  // User selected mood changed
-  void _onMoodChanged(UserMood mood) {
-    setState(() {
-      _currentMood = mood;
-    });
-    _moodAnimationController.forward(from: 0.0);
-  }
-
-  // Get UserMood from MoodType
-  UserMood _getMoodFromType(MoodType? moodType) {
-    if (moodType == null) return MoodOptions.relaxed;
-
-    switch (moodType) {
-      case MoodType.happy:
-        return MoodOptions.happy;
-      case MoodType.sad:
-        return MoodOptions.sad;
-      case MoodType.angry:
-        return MoodOptions.angry;
-      case MoodType.excited:
-        return MoodOptions.excited;
-      case MoodType.bored:
-        return MoodOptions.bored;
-      case MoodType.annoyed:
-        return MoodOptions.annoyed;
-      case MoodType.calm:
-        return MoodOptions.relaxed;
-      case MoodType.neutral:
-      default:
-        return MoodOptions.relaxed;
-    }
-  }
-
-  // Convert ChatMessage to Message format for MessageBubble
-  Message _convertToMessage(ChatMessage chatMessage) {
-    final isMe = chatMessage.senderId == _currentUserId;
-
-    return Message(
-      content: chatMessage.content,
-      timestamp: chatMessage.timestamp,
-      isMe: isMe,
-      senderName: isMe ? 'You' : chatMessage.senderName,
-      mood: _getMoodFromType(chatMessage.mood),
-      reactions: chatMessage.reactions,
-    );
-  }
-
-  // Build the message list
-  Widget _buildMessageList() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_messages.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 48,
-              color: Colors.white.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No messages yet',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Start a conversation!',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      reverse: true,
-      padding: const EdgeInsets.only(top: 15, bottom: 70),
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        final chatMessage = _messages[index];
-        final message = _convertToMessage(chatMessage);
-
-        return GestureDetector(
-          onLongPress: () {
-            // Show reactions menu
-          },
-          child: MessageBubble(
-            message: message,
-            onReactionTap: (reaction) => _addReaction(chatMessage.id, reaction),
-          ),
-        );
-      },
-    );
+    _focusNode.requestFocus(); // Focus back to text input
   }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
-        elevation: 0,
-        title: Row(
-          children: [
-            const Icon(Icons.person),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(widget.contactName, overflow: TextOverflow.ellipsis),
+    return StreamBuilder<ChatRoom?>(
+      stream: _chatService.getChatRoomStream(widget.chatRoomId),
+      builder: (context, roomSnapshot) {
+        if (roomSnapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(widget.contactName),
+              backgroundColor: const Color(0xFF1A1A2E),
             ),
-            // Add token balance in the AppBar
-            const TokenBalance(isCompact: true, showLabel: false),
-          ],
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
-        ],
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              isDarkMode ? AppColors.darkBackground : Colors.grey.shade100,
-              isDarkMode
-                  ? AppColors.darkBackground.withOpacity(0.9)
-                  : Colors.white,
+            body: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        final chatRoom = roomSnapshot.data;
+        if (chatRoom == null) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(widget.contactName),
+              backgroundColor: const Color(0xFF1A1A2E),
+            ),
+            body: const Center(
+              child: Text('Chat room not found', style: TextStyle(color: Colors.white)),
+            ),
+          );
+        }
+
+        final isAdmin = chatRoom.creatorId == _currentUserId;
+
+        return Scaffold(
+          appBar: AppBar(
+            backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+            elevation: 0,
+            title: Row(
+              children: [
+                const Icon(Icons.person),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(chatRoom.name, overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+            actions: [
+              // Invite users button (only visible for room creator/admin)
+              if (isAdmin)
+                IconButton(
+                  icon: const Icon(Icons.person_add),
+                  tooltip: 'Invite Users',
+                  onPressed: () => _showInviteUsersDialog(context, chatRoom),
+                ),
+                
+              // Share Room ID button
+              IconButton(
+                icon: const Icon(Icons.share),
+                tooltip: 'Share Room ID',
+                onPressed: () => _showShareRoomDialog(context, chatRoom),
+              ),
+              // Token balance
+              const Padding(
+                padding: EdgeInsets.only(right: 8.0),
+                child: TokenBalance(isCompact: true, showLabel: false),
+              ),
             ],
           ),
-        ),
-        child: Column(
-          children: [
-            // Participants with mood indicators
-            _buildParticipantsRow(),
-
-            // Messages list
-            Expanded(child: _buildMessageList()),
-
-            // Message input bar
-            Container(
-              margin: const EdgeInsets.all(8),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: isDarkMode ? const Color(0xFF252836) : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: isDarkMode ? Colors.white10 : Colors.grey.shade300,
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  // Mood indicator for current message
-                  GestureDetector(
-                    onTap: _showMoodSelector,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      child: MoodIcon(mood: _currentMood, size: 28),
-                    ),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Type a message',
-                        hintStyle: TextStyle(
-                          color:
-                              isDarkMode ? Colors.grey : Colors.grey.shade600,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                        ),
-                      ),
-                      style: TextStyle(
-                        color: isDarkMode ? Colors.white : Colors.black87,
-                      ),
-                      maxLines: null,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.attach_file),
-                    color: Colors.grey,
-                    onPressed: () {},
-                  ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryBlue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.send,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      onPressed: _sendMessage,
-                    ),
-                  ),
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  isDarkMode ? AppColors.darkBackground : Colors.grey.shade100,
+                  isDarkMode
+                      ? AppColors.darkBackground.withOpacity(0.9)
+                      : Colors.white,
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showMoodSelector() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder:
-          (context) => Container(
-            decoration: BoxDecoration(
-              color:
-                  Theme.of(context).brightness == Brightness.dark
-                      ? AppColors.darkSecondaryBackground
-                      : Colors.white,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(16),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'How are you feeling?',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 20,
-                  alignment: WrapAlignment.center,
-                  children:
-                      MoodOptions.allMoods
-                          .map(
-                            (mood) => GestureDetector(
-                              onTap: () {
-                                _onMoodChanged(mood);
-                                Navigator.pop(context);
+                // Messages list
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _errorMessage != null
+                          ? Center(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(color: Colors.red),
+                              ),
+                            )
+                          : StreamBuilder<List<ChatMessage>>(
+                              key: ValueKey<String>('message_stream_${widget.chatRoomId}'),
+                              stream: _chatService.getChatMessagesStream(widget.chatRoomId),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState == ConnectionState.waiting &&
+                                    _messages.isEmpty) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
+
+                                // Create a combined list that prioritizes snapshot data but falls back to local messages
+                                List<ChatMessage> combinedMessages = [];
+                                
+                                // First add messages from the stream if available
+                                if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                                  // Don't modify combinedMessages directly if it's the same as before
+                                  final newMessages = snapshot.data!;
+                                  
+                                  // Use our optimized method to check if we need to rebuild
+                                  final needsRebuild = _shouldRebuildMessagesList(_messages, newMessages);
+                                  
+                                  if (needsRebuild) {
+                                    combinedMessages.addAll(newMessages);
+                                    // Store latest message from each sender
+                                    _updateLatestUserMessages(newMessages);
+                                    
+                                    // Update _messages but avoid triggering a rebuild
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      if (mounted) {
+                                        _messages.clear();
+                                        _messages.addAll(combinedMessages);
+                                      }
+                                    });
+                                  } else {
+                                    // If messages haven't changed, just use the existing list
+                                    combinedMessages.addAll(_messages);
+                                  }
+                                } else if (_messages.isNotEmpty) {
+                                  // If no stream data, use existing messages
+                                  debugPrint("Using local cached messages instead of empty stream data");
+                                  combinedMessages.addAll(_messages);
+                                  // Also store these in our latest messages map
+                                  _updateLatestUserMessages(_messages);
+                                }
+                                
+                                // Check for missing senders in this update
+                                if (snapshot.hasData && combinedMessages.isNotEmpty) {
+                                  // Get set of sender IDs in current messages
+                                  final currentSenderIds = combinedMessages.map((m) => m.senderId).toSet();
+                                  
+                                  // Add back any missing user messages (like Betty's)
+                                  List<ChatMessage> missingMessages = [];
+                                  _latestUserMessages.forEach((senderId, message) {
+                                    if (!currentSenderIds.contains(senderId)) {
+                                      debugPrint("Re-adding message from missing sender: $senderId");
+                                      missingMessages.add(message);
+                                    }
+                                  });
+                                  
+                                  // Add missing messages without rebuilding if possible
+                                  if (missingMessages.isNotEmpty) {
+                                    combinedMessages.addAll(missingMessages);
+                                    // Re-sort the messages by timestamp
+                                    combinedMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+                                    
+                                    // Update _messages in the background
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      if (mounted) {
+                                        _messages.clear();
+                                        _messages.addAll(combinedMessages);
+                                      }
+                                    });
+                                  }
+                                }
+                                
+                                // Detect when messages disappear for specific accounts
+                                if (snapshot.hasData && snapshot.data!.isEmpty && _messages.isNotEmpty) {
+                                  debugPrint("WARNING: Stream returned empty messages when we had local messages");
+                                }
+                                
+                                // Always use the combined messages for display
+                                final messagesToShow = combinedMessages.isNotEmpty ? combinedMessages : _messages;
+                                
+                                // If we have any messages to show, display them
+                                if (messagesToShow.isNotEmpty) {
+                                  return RefreshIndicator(
+                                    onRefresh: _forceRefreshMessages,
+                                    color: AppColors.primaryBlue,
+                                    child: ListView.builder(
+                                      key: ValueKey<int>(messagesToShow.length), // Key based on length to preserve scroll
+                                      padding: const EdgeInsets.all(8.0),
+                                      reverse: true,
+                                      itemCount: messagesToShow.length,
+                                      itemBuilder: (context, index) {
+                                        final message = messagesToShow[index];
+                                        final isCurrentUser =
+                                            message.senderId == _currentUserId;
+
+                                        return MessageBubble(
+                                          key: ValueKey<String>(message.id), // Key helps avoid rebuilds for unchanged messages
+                                          message: Message.fromChatMessage(message, _currentUserId),
+                                          isCurrentUser: isCurrentUser,
+                                        );
+                                      },
+                                    ),
+                                  );
+                                } else {
+                                  // Show empty state if we have no messages at all
+                                  return Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.message,
+                                          size: 48,
+                                          color: Colors.grey.withOpacity(0.5),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        const Text(
+                                          "No messages yet. Be the first to send one!",
+                                          style: TextStyle(
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
                               },
-                              child: MoodVisualizer(
-                                mood: mood,
-                                size: 60,
-                                label: mood.name,
+                            ),
+                ),
+
+                // Error message
+                if (_errorMessage != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    color: Colors.red.withOpacity(0.1),
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+
+                // Mood selector
+                if (_selectedMood != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    color: isDarkMode ? Colors.black12 : Colors.grey.shade200,
+                    child: Row(
+                      children: [
+                        Icon(
+                          getMoodIcon(_selectedMood!),
+                          color: getMoodColor(_selectedMood!),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Mood: ${getMoodName(_selectedMood!)}',
+                          style: TextStyle(
+                            color: getMoodColor(_selectedMood!),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () {
+                            setState(() {
+                              _selectedMood = null;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Message input
+                Container(
+                  padding: const EdgeInsets.all(8.0),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        offset: const Offset(0, -2),
+                        blurRadius: 4,
+                        color: Colors.black.withOpacity(0.1),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Mood selector button
+                      IconButton(
+                        icon: Icon(
+                          _selectedMood != null
+                              ? getMoodIcon(_selectedMood!)
+                              : Icons.mood,
+                          color: _selectedMood != null
+                              ? getMoodColor(_selectedMood!)
+                              : Colors.grey,
+                        ),
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => MoodSelector(
+                              onMoodSelected: _onMoodSelected,
+                              selectedMood: _selectedMood,
+                            ),
+                          );
+                        },
+                      ),
+
+                      // Text input
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isDarkMode ? const Color(0xFF252836) : Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: isDarkMode ? Colors.white10 : Colors.grey.shade300,
+                              width: 1,
+                            ),
+                          ),
+                          child: TextField(
+                            controller: _textController,
+                            focusNode: _focusNode,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: InputDecoration(
+                              hintText: 'Type a message...',
+                              hintStyle: TextStyle(
+                                color:
+                                    isDarkMode ? Colors.grey : Colors.grey.shade600,
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 8,
                               ),
                             ),
-                          )
-                          .toList(),
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                            maxLines: null,
+                            onSubmitted: (_) => _sendMessage(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Send button
+                      Material(
+                        color: AppColors.primaryBlue,
+                        borderRadius: BorderRadius.circular(24),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(24),
+                          onTap: _sendingMessage ? null : _sendMessage,
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.center,
+                            child: _sendingMessage
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.send,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 20),
               ],
             ),
-          ),
-    );
-  }
-
-  Widget _buildActivityIndicator() {
-    return AnimatedBuilder(
-      animation: _activityPulseController,
-      builder: (context, child) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.black26,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.bolt, color: Colors.white70, size: 14),
-              const SizedBox(width: 2),
-              Text(
-                '${(_chatActivityLevel * 100).toInt()}%',
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
           ),
         );
       },
     );
   }
 
-  Color _getActivityColor(double activity) {
-    if (activity < 0.3) return Colors.blue;
-    if (activity < 0.6) return Colors.green;
-    if (activity < 0.8) return Colors.amber;
-    return Colors.red;
-  }
-
-  Widget _buildParticipantsRow() {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Mood wave visualization
-        Container(
-          height: 50,
-          clipBehavior: Clip.hardEdge,
-          decoration: BoxDecoration(
-            color: isDarkMode ? const Color(0xFF1F2130) : Colors.grey.shade200,
-            border: Border(
-              bottom: BorderSide(
-                color: isDarkMode ? Colors.white10 : Colors.black12,
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: MoodWave(
-            participants: _participants,
-            height: 50,
-            activityLevel: _chatActivityLevel,
-          ),
+  // Show dialog to share room ID
+  void _showShareRoomDialog(BuildContext context, ChatRoom chatRoom) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: AppColors.primaryPurple, width: 1),
         ),
-
-        // Mood selection row
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isDarkMode ? Colors.black12 : Colors.white10,
-            border: Border(
-              bottom: BorderSide(
-                color: isDarkMode ? Colors.white10 : Colors.black12,
-                width: 0.5,
+        title: Row(
+          children: [
+            Icon(Icons.share, color: AppColors.primaryPurple),
+            const SizedBox(width: 8),
+            const Text(
+              'Share Chat Room',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                _buildInfoText(),
-                const SizedBox(width: 8),
-                ...MoodOptions.allMoods.take(6).map((mood) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: GestureDetector(
-                      onTap: () => _onMoodChanged(mood),
-                      child: MoodVisualizer(
-                        mood: mood,
-                        size: 32,
-                        interactive: true,
-                        showPulse: mood.name == _currentMood.name,
-                      ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Share this Room ID with friends to invite them to join:',
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Room ID:',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
                     ),
-                  );
-                }).toList(),
-              ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          chatRoom.id,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.copy,
+                          color: AppColors.primaryPurple,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: chatRoom.id));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Room ID copied to clipboard'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        tooltip: 'Copy to clipboard',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Instructions:',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '1. Send this Room ID to your friend\n'
+              '2. Ask them to go to the Chat Rooms screen\n'
+              '3. Tap the "Join Room" button in the top-right\n'
+              '4. Enter this Room ID to join the conversation',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton.icon(
+            icon: const Icon(Icons.share),
+            label: const Text('SHARE ID'),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: chatRoom.id));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Room ID copied to clipboard'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryPurple,
+              foregroundColor: Colors.white,
             ),
           ),
-        ),
-      ],
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white70,
+            ),
+            child: const Text('CLOSE'),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildInfoText() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.black26,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Text(
-        'Tap an emoji to set your current mood',
-        style: TextStyle(color: Colors.white70, fontSize: 12),
-      ),
+  // Add this new method to show the invite users dialog
+  void _showInviteUsersDialog(BuildContext context, ChatRoom chatRoom) {
+    ChatInviteDialog.show(
+      context: context,
+      roomId: chatRoom.id,
+      roomName: chatRoom.name,
     );
+  }
+
+  Future<void> _forceRefreshMessages() async {
+    try {
+      final refreshedMessages = await _chatService.forceRefreshMessages(widget.chatRoomId);
+      
+      if (refreshedMessages.isNotEmpty && mounted) {
+        // Before updating all messages, make sure we preserve our latest user messages
+        _updateLatestUserMessages(refreshedMessages);
+        
+        // Check if any senders from our tracked list are missing in the fresh results
+        final senderIds = refreshedMessages.map((m) => m.senderId).toSet();
+        List<ChatMessage> messagesToAdd = [];
+        
+        _latestUserMessages.forEach((senderId, message) {
+          if (!senderIds.contains(senderId)) {
+            // This sender (like Betty) is missing in the refresh, add their message back
+            messagesToAdd.add(message);
+            debugPrint("Preserving message from sender $senderId during refresh");
+          }
+        });
+        
+        setState(() {
+          // Update with the refreshed messages plus any preserved messages
+          _messages.clear();
+          _messages.addAll(refreshedMessages);
+          
+          // Add any missing sender messages back
+          if (messagesToAdd.isNotEmpty) {
+            _messages.addAll(messagesToAdd);
+            // Sort by timestamp again since we added new messages
+            _messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error force refreshing messages: $e');
+      // Don't show error to user, fail silently as this is a background refresh
+    }
+  }
+
+  // Store latest message from each sender to prevent message loss
+  void _updateLatestUserMessages(List<ChatMessage> messages) {
+    for (final message in messages) {
+      // Only update if this is a newer message
+      if (!_latestUserMessages.containsKey(message.senderId) ||
+          _latestUserMessages[message.senderId]!.timestamp.isBefore(message.timestamp)) {
+        _latestUserMessages[message.senderId] = message;
+      }
+    }
+  }
+
+  // Check if we need to rebuild the messages list
+  bool _shouldRebuildMessagesList(List<ChatMessage> oldMessages, List<ChatMessage> newMessages) {
+    // Quick length check
+    if (oldMessages.length != newMessages.length) return true;
+    if (oldMessages.isEmpty) return newMessages.isNotEmpty;
+    if (newMessages.isEmpty) return oldMessages.isNotEmpty;
+    
+    // Check the first and last messages for changes
+    // This is a quick approximation that works well for chat apps
+    final firstOldMsg = oldMessages.first;
+    final firstNewMsg = newMessages.first;
+    final lastOldMsg = oldMessages.last;
+    final lastNewMsg = newMessages.last;
+    
+    // If the first or last messages are different, rebuild
+    if (firstOldMsg.id != firstNewMsg.id) return true;
+    if (lastOldMsg.id != lastNewMsg.id) return true;
+    
+    // If the length of messages and first/last are the same, likely no changes
+    return false;
+  }
+}
+
+// Helper functions for mood handling
+IconData getMoodIcon(MoodType mood) {
+  switch (mood) {
+    case MoodType.happy:
+      return Icons.sentiment_satisfied;
+    case MoodType.excited:
+      return Icons.sentiment_very_satisfied;
+    case MoodType.calm:
+      return Icons.sentiment_neutral;
+    case MoodType.bored:
+      return Icons.sentiment_neutral;
+    case MoodType.annoyed:
+      return Icons.sentiment_dissatisfied;
+    case MoodType.angry:
+      return Icons.sentiment_very_dissatisfied;
+    case MoodType.sad:
+      return Icons.sentiment_dissatisfied;
+    case MoodType.neutral:
+    default:
+      return Icons.sentiment_neutral;
+  }
+}
+
+Color getMoodColor(MoodType mood) {
+  switch (mood) {
+    case MoodType.happy:
+      return Colors.amber;
+    case MoodType.excited:
+      return AppColors.primaryPurple;
+    case MoodType.calm:
+      return AppColors.primaryBlue;
+    case MoodType.bored:
+      return Colors.grey;
+    case MoodType.annoyed:
+      return AppColors.primaryOrange;
+    case MoodType.angry:
+      return Colors.red;
+    case MoodType.sad:
+      return Colors.blueGrey;
+    case MoodType.neutral:
+    default:
+      return Colors.teal;
+  }
+}
+
+String getMoodName(MoodType mood) {
+  switch (mood) {
+    case MoodType.happy:
+      return 'Happy';
+    case MoodType.excited:
+      return 'Excited';
+    case MoodType.calm:
+      return 'Calm';
+    case MoodType.bored:
+      return 'Bored';
+    case MoodType.annoyed:
+      return 'Annoyed';
+    case MoodType.angry:
+      return 'Angry';
+    case MoodType.sad:
+      return 'Sad';
+    case MoodType.neutral:
+    default:
+      return 'Neutral';
   }
 }

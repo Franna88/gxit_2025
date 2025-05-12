@@ -18,10 +18,31 @@ service cloud.firestore {
       allow read: if resource.data.isPublic == true || 
                      (request.auth != null && resource.data.memberIds.hasAny([request.auth.uid]));
       
-      // Only members can write to chat rooms
-      allow write: if request.auth != null && 
-                     (resource.data.memberIds.hasAny([request.auth.uid]) || 
-                      request.resource.data.memberIds.hasAny([request.auth.uid]));
+      // Allow joining public chat rooms by adding user to memberIds
+      allow update: if request.auth != null && (
+                     // Case 1: User is already a member and is updating the room
+                     (resource.data.memberIds.hasAny([request.auth.uid]) &&
+                      // Ensure critical fields aren't being modified by non-creator
+                      (resource.data.creatorId == request.auth.uid || 
+                       (request.resource.data.name == resource.data.name &&
+                        request.resource.data.isPublic == resource.data.isPublic &&
+                        request.resource.data.creatorId == resource.data.creatorId))) ||
+                     
+                     // Case 2: User is joining a public room (only adding themselves to memberIds)
+                     (resource.data.isPublic == true &&
+                      request.resource.data.memberIds.hasAll(resource.data.memberIds) &&
+                      request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1 &&
+                      request.resource.data.memberIds.hasAny([request.auth.uid]) &&
+                      // Ensure no other fields are being modified when joining
+                      request.resource.data.name == resource.data.name &&
+                      request.resource.data.isPublic == resource.data.isPublic &&
+                      request.resource.data.creatorId == resource.data.creatorId)
+                   );
+      
+      // Only creator can create chat rooms
+      allow create: if request.auth != null && 
+                     request.auth.uid == request.resource.data.creatorId &&
+                     request.resource.data.memberIds.hasAny([request.auth.uid]);
     }
     
     // Messages rules

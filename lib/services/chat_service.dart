@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../models/chat_room.dart';
 import '../models/chat_message.dart';
 import '../models/user_model.dart';
@@ -19,8 +21,84 @@ class ChatService {
   CollectionReference get _messagesCollection =>
       _firestore.collection('messages');
 
+  // Keep a cache of messages per room to prevent flickering or disappearing messages
+  final Map<String, List<ChatMessage>> _messageCache = {};
+  
+  // Flag to check if local storage has been initialized
+  bool _localStorageInitialized = false;
+  
+  // Initialize local storage on startup
+  Future<void> _initLocalStorage() async {
+    if (_localStorageInitialized) return;
+    
+    try {
+      // Restore cached messages from SharedPreferences
+      await _loadCachedMessagesFromStorage();
+      _localStorageInitialized = true;
+    } catch (e) {
+      print('Error initializing local storage: $e');
+    }
+  }
+  
+  // Save messages to local storage
+  Future<void> _saveMessagesToLocalStorage(String roomId, List<ChatMessage> messages) async {
+    try {
+      if (messages.isEmpty) return;
+      
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Convert messages to JSON
+      final messagesJson = messages.map((msg) {
+        final map = msg.toMap();
+        // Handle timestamp conversion
+        if (map['timestamp'] is Timestamp) {
+          map['timestamp'] = (map['timestamp'] as Timestamp).millisecondsSinceEpoch;
+        }
+        return map;
+      }).toList();
+      
+      // Save to SharedPreferences
+      await prefs.setString('messages_$roomId', jsonEncode(messagesJson));
+      print('Saved ${messages.length} messages to local storage for room $roomId');
+    } catch (e) {
+      print('Error saving messages to local storage: $e');
+    }
+  }
+  
+  // Load cached messages from local storage
+  Future<void> _loadCachedMessagesFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Get all keys from prefs that match our message pattern
+      final keys = prefs.getKeys().where((key) => key.startsWith('messages_')).toList();
+      
+      for (final key in keys) {
+        final roomId = key.substring('messages_'.length);
+        final json = prefs.getString(key);
+        
+        if (json != null) {
+          try {
+            final List<dynamic> messagesJson = jsonDecode(json);
+            final messages = messagesJson.map((jsonMsg) {
+              return ChatMessage.fromMap(jsonMsg);
+            }).toList();
+            
+            // Store in cache
+            _messageCache[roomId] = messages;
+            print('Loaded ${messages.length} cached messages for room $roomId');
+          } catch (e) {
+            print('Error parsing cached messages for room $roomId: $e');
+          }
+        }
+      }
+    } catch (e) {
+      print('Error loading cached messages from storage: $e');
+    }
+  }
+
   // Get current user ID
-  String? get currentUserId => _auth.currentUser?.uid;
+  String? get currentUserId => _auth.currentUser?.uid ?? '';
 
   // Get chat room document reference
   DocumentReference getChatRoomRef(String roomId) {
@@ -37,6 +115,20 @@ class ChatService {
     });
   }
 
+  // Get a chat room by ID (one-time fetch, not stream)
+  Future<ChatRoom?> getChatRoomById(String roomId) async {
+    try {
+      final doc = await getChatRoomRef(roomId).get();
+      if (doc.exists) {
+        return ChatRoom.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting chat room by ID: $e');
+      return null;
+    }
+  }
+
   // Get all chat rooms for current user
   Stream<List<ChatRoom>> getUserChatRoomsStream(String userId) {
     return _roomsCollection
@@ -49,16 +141,119 @@ class ChatService {
         });
   }
 
+  // Get all public chat rooms
+  Future<List<ChatRoom>> getPublicChatRooms() async {
+    try {
+      final snapshot = await _roomsCollection
+          .where('isPublic', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .get();
+          
+      return snapshot.docs
+          .map((doc) => ChatRoom.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print('Error getting public chat rooms: $e');
+      return [];
+    }
+  }
+
+  // Get initial messages for a chat room (non-stream version for quick checks)
+  Future<List<ChatMessage>> getInitialMessages(String roomId, int limit) async {
+    try {
+      final snapshot = await _messagesCollection
+          .where('chatRoomId', isEqualTo: roomId)
+          .orderBy('timestamp', descending: true)
+          .limit(limit)
+          .get();
+          
+      return snapshot.docs
+          .map((doc) => ChatMessage.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print('Error getting initial messages: $e');
+      return [];
+    }
+  }
+
   // Get messages for a chat room
   Stream<List<ChatMessage>> getChatMessagesStream(String roomId) {
+    // Ensure local storage is initialized
+    if (!_localStorageInitialized) {
+      _initLocalStorage();
+    }
+    
+    // Create a map to track messages by sender to prevent their disappearance
+    Map<String, ChatMessage> latestMessagesBySender = {};
+    
     return _messagesCollection
         .where('chatRoomId', isEqualTo: roomId)
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
+          final messages = snapshot.docs
               .map((doc) => ChatMessage.fromFirestore(doc))
               .toList();
+          
+          // Process and store messages by sender ID to ensure we keep them
+          for (final message in messages) {
+            // Store the latest message from each sender
+            if (!latestMessagesBySender.containsKey(message.senderId) || 
+                latestMessagesBySender[message.senderId]!.timestamp.isBefore(message.timestamp)) {
+              latestMessagesBySender[message.senderId] = message;
+            }
+          }
+          
+          // If we got messages, save them to persistent storage
+          if (messages.isNotEmpty) {
+            _saveMessagesToLocalStorage(roomId, messages);
+          }
+          
+          // If we got an empty list but have cached messages, use the cache
+          if (messages.isEmpty && _messageCache.containsKey(roomId) && 
+              (_messageCache[roomId]?.isNotEmpty ?? false)) {
+            print('Using cached messages for room: $roomId');
+            return _messageCache[roomId]!;
+          }
+          
+          // Otherwise, update the cache with the new messages
+          if (messages.isNotEmpty) {
+            _messageCache[roomId] = messages;
+            
+            // Since we have fresh messages, rebuild our map of latest messages per sender
+            latestMessagesBySender.clear();
+            for (final message in messages) {
+              if (!latestMessagesBySender.containsKey(message.senderId) || 
+                  latestMessagesBySender[message.senderId]!.timestamp.isBefore(message.timestamp)) {
+                latestMessagesBySender[message.senderId] = message;
+              }
+            }
+          } else if (_messageCache.containsKey(roomId)) {
+            // If the new stream is empty but we have cache, check if we're losing sender messages
+            // and append them to avoid losing messages from specific users
+            final cachedMessages = _messageCache[roomId]!;
+            
+            // Track senders in the current stream result
+            final senderIds = messages.map((m) => m.senderId).toSet();
+            
+            // Find messages from senders that are missing in this update but were in our cache
+            for (final cachedMsg in cachedMessages) {
+              if (!senderIds.contains(cachedMsg.senderId)) {
+                // We found a sender whose messages disappeared - add their latest message back
+                if (latestMessagesBySender.containsKey(cachedMsg.senderId)) {
+                  messages.add(latestMessagesBySender[cachedMsg.senderId]!);
+                  print('Preserved message from sender: ${cachedMsg.senderId} to prevent disappearance');
+                }
+              }
+            }
+          }
+          
+          // Ensure we don't return an empty list if there's a temporary issue
+          if (messages.isEmpty) {
+            print('Warning: Empty messages stream for room: $roomId');
+          }
+          
+          return messages;
         });
   }
 
@@ -168,8 +363,8 @@ class ChatService {
         return false;
       }
 
-      // Save the message
-      await _messagesCollection.add({
+      // Prepare message data
+      final messageData = {
         'content': content,
         'senderId': userId,
         'senderName': user.name,
@@ -177,34 +372,79 @@ class ChatService {
         'timestamp': FieldValue.serverTimestamp(),
         'mood': mood?.index,
         'tokenUsed': true,
-      });
+      };
+      
+      // Try to save the message with retry logic (up to 2 retries)
+      DocumentReference? messageRef;
+      int retries = 0;
+      while (retries < 3 && messageRef == null) {
+        try {
+          messageRef = await _messagesCollection.add(messageData);
+        } catch (e) {
+          print('Error saving message (attempt ${retries + 1}): $e');
+          retries++;
+          if (retries >= 3) rethrow;
+          // Wait briefly before retry
+          await Future.delayed(Duration(milliseconds: 500 * retries));
+        }
+      }
 
-      // Update the chat room's last message
-      await getChatRoomRef(chatRoomId).update({
-        'lastMessage': content,
-        'lastSenderId': userId,
-        'lastActivity': FieldValue.serverTimestamp(),
-      });
+      // Update the chat room's last message info in a separate transaction
+      try {
+        await getChatRoomRef(chatRoomId).update({
+          'lastMessage': content,
+          'lastSenderId': userId,
+          'lastActivity': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        print('Warning: Failed to update room last message: $e');
+        // Don't fail the whole operation if only the room update fails
+      }
 
-      return true;
+      return messageRef != null;
     } catch (e) {
       print('Error sending message: $e');
-      return false; // Return false instead of rethrowing
+      rethrow; // Rethrow so UI can show appropriate error
     }
   }
 
   // Join a chat room
   Future<bool> joinChatRoom(String roomId) async {
-    final userId = currentUserId;
-    if (userId == null) return false;
+    try {
+      final userId = currentUserId;
+      if (userId == null) return false;
 
-    // Update the room's member list
-    await getChatRoomRef(roomId).update({
-      'memberIds': FieldValue.arrayUnion([userId]),
-      'memberCount': FieldValue.increment(1),
-    });
+      // First check if the room exists
+      final roomDoc = await getChatRoomRef(roomId).get();
+      if (!roomDoc.exists) {
+        throw Exception('Chat room does not exist');
+      }
 
-    return true;
+      final room = ChatRoom.fromFirestore(roomDoc);
+      
+      // Check if user is already a member
+      if (room.memberIds.contains(userId)) {
+        // User is already a member, no need to update
+        return true;
+      }
+      
+      // Check if the room is public or if the user has been invited
+      if (!room.isPublic) {
+        // This is a private room - could add invitation check here in the future
+        throw Exception('Cannot join a private chat room without an invitation');
+      }
+
+      // Update the room's member list
+      await getChatRoomRef(roomId).update({
+        'memberIds': FieldValue.arrayUnion([userId]),
+        'memberCount': FieldValue.increment(1),
+      });
+
+      return true;
+    } catch (e) {
+      print('Error joining chat room: $e');
+      rethrow; // Rethrow so caller can display appropriate error
+    }
   }
 
   // Leave a chat room
@@ -736,5 +976,130 @@ class ChatService {
       print('Error marking notification as read: $e');
       return false;
     }
+  }
+
+  // Check if user is already a member of a chat room
+  Future<bool> isUserMemberOfRoom(String roomId) async {
+    final userId = currentUserId;
+    if (userId == null) return false;
+
+    try {
+      final roomDoc = await getChatRoomRef(roomId).get();
+      if (!roomDoc.exists) return false;
+
+      final room = ChatRoom.fromFirestore(roomDoc);
+      return room.memberIds.contains(userId);
+    } catch (e) {
+      print('Error checking room membership: $e');
+      return false;
+    }
+  }
+
+  // Special method to force refresh messages for accounts with sync issues (like Litha's)
+  Future<List<ChatMessage>> forceRefreshMessages(String roomId) async {
+    try {
+      // Ensure local storage is initialized
+      if (!_localStorageInitialized) {
+        await _initLocalStorage();
+      }
+      
+      // Use a direct Firestore query to get the latest messages
+      final snapshot = await _firestore
+          .collection('messages')
+          .where('chatRoomId', isEqualTo: roomId)
+          .orderBy('timestamp', descending: true)
+          .limit(50)
+          .get();
+          
+      final messages = snapshot.docs
+          .map((doc) => ChatMessage.fromFirestore(doc))
+          .toList();
+          
+      // Check if we got messages from Firestore
+      if (messages.isNotEmpty) {
+        // Save to local storage immediately
+        await _saveMessagesToLocalStorage(roomId, messages);
+        
+        // Update the cache with these fresh messages
+        _messageCache[roomId] = messages;
+        print('Force refreshed ${messages.length} messages for room: $roomId');
+        return messages;
+      } else {
+        // If we didn't get any messages from Firestore, try to load from local storage
+        if (_messageCache.containsKey(roomId) && _messageCache[roomId]!.isNotEmpty) {
+          print('Using cached messages during force refresh for room: $roomId');
+          return _messageCache[roomId]!;
+        }
+        
+        // No messages anywhere - try one more desperate approach
+        try {
+          final fallbackSnapshot = await _firestore
+              .collection('messages')
+              .where('chatRoomId', isEqualTo: roomId)
+              .get();
+              
+          if (fallbackSnapshot.docs.isNotEmpty) {
+            final fallbackMessages = fallbackSnapshot.docs
+                .map((doc) => ChatMessage.fromFirestore(doc))
+                .toList();
+                
+            // Sort by timestamp
+            fallbackMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+            
+            // Save to local storage
+            await _saveMessagesToLocalStorage(roomId, fallbackMessages);
+            
+            // Update cache
+            _messageCache[roomId] = fallbackMessages;
+            print('Force refreshed ${fallbackMessages.length} messages using fallback for room: $roomId');
+            return fallbackMessages;
+          }
+        } catch (fallbackError) {
+          print('Error in fallback refresh: $fallbackError');
+        }
+      }
+      
+      return [];
+    } catch (e) {
+      print('Error force refreshing messages: $e');
+      
+      // Last resort: try to use the cache
+      if (_messageCache.containsKey(roomId)) {
+        return _messageCache[roomId]!;
+      }
+      
+      return [];
+    }
+  }
+
+  // Add messages directly to the local cache - helps ensure messages never disappear
+  Future<void> addToLocalCache(String roomId, List<ChatMessage> messages) async {
+    if (messages.isEmpty) return;
+    
+    // Ensure we have initialized local storage
+    if (!_localStorageInitialized) {
+      await _initLocalStorage();
+    }
+    
+    // Add to memory cache first
+    if (!_messageCache.containsKey(roomId)) {
+      _messageCache[roomId] = [];
+    }
+    
+    // Add new messages to existing ones (avoid duplicates by id)
+    final existingIds = _messageCache[roomId]!.map((m) => m.id).toSet();
+    for (final message in messages) {
+      if (!existingIds.contains(message.id)) {
+        _messageCache[roomId]!.add(message);
+      }
+    }
+    
+    // Sort again after adding
+    _messageCache[roomId]!.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    
+    // Save to persistent storage
+    await _saveMessagesToLocalStorage(roomId, _messageCache[roomId]!);
+    
+    print('Added ${messages.length} messages to local cache for room $roomId');
   }
 }

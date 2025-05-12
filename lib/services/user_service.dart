@@ -82,11 +82,19 @@ class UserService {
     required String userId,
     String? name,
     String? email,
+    String? description,
+    String? preferences,
+    String? wants,
+    String? needs,
   }) async {
     final updates = <String, dynamic>{};
 
     if (name != null) updates['name'] = name;
     if (email != null) updates['email'] = email;
+    if (description != null) updates['description'] = description;
+    if (preferences != null) updates['preferences'] = preferences;
+    if (wants != null) updates['wants'] = wants;
+    if (needs != null) updates['needs'] = needs;
 
     if (updates.isNotEmpty) {
       await getUserRef(userId).update(updates);
@@ -108,6 +116,50 @@ class UserService {
     } else {
       // User exists, just update the login timestamp
       await updateLastLogin(userId);
+    }
+  }
+
+  // Check if user has completed the self-description step
+  Future<bool> hasCompletedSelfDescription(String userId) async {
+    try {
+      final user = await getUser(userId);
+      return user?.description != null;
+    } catch (e) {
+      print('Error checking user description: $e');
+      return false;
+    }
+  }
+
+  // Check if user has completed the preferences step
+  Future<bool> hasCompletedPreferences(String userId) async {
+    try {
+      final user = await getUser(userId);
+      return user?.preferences != null;
+    } catch (e) {
+      print('Error checking user preferences: $e');
+      return false;
+    }
+  }
+
+  // Check if user has completed the wants step
+  Future<bool> hasCompletedWants(String userId) async {
+    try {
+      final user = await getUser(userId);
+      return user?.wants != null;
+    } catch (e) {
+      print('Error checking user wants: $e');
+      return false;
+    }
+  }
+
+  // Check if user has completed the needs step
+  Future<bool> hasCompletedNeeds(String userId) async {
+    try {
+      final user = await getUser(userId);
+      return user?.needs != null;
+    } catch (e) {
+      print('Error checking user needs: $e');
+      return false;
     }
   }
 
@@ -295,5 +347,15 @@ class UserService {
         isSystemBot: true,
       );
     }
+  }
+
+  Future<UserModel?> getCurrentUser() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+    if (!doc.exists) return null;
+    
+    return UserModel.fromFirestore(doc);
   }
 }

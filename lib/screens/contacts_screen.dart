@@ -10,6 +10,9 @@ import '../models/user_model.dart';
 import '../services/chat_service.dart';
 import '../models/contact_model.dart';
 import '../services/user_service.dart';
+import '../services/contacts_service.dart';
+import '../widgets/not_enough_tokens_dialog.dart';
+import '../models/chat_room.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -32,65 +35,24 @@ class _ContactsScreenState extends State<ContactsScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
-  // Predefined contact groups
-  final Map<String, List<Map<String, dynamic>>> _contactGroups = {
-    'Favorites': [
-      {
-        'name': 'JoeBanker',
-        'status': ContactStatus.online,
-        'messageType': 'Urgent',
-      },
-      {'name': 'TradePost', 'status': ContactStatus.online},
-    ],
-    'Trading': [
-      {
-        'name': 'Alex Trader',
-        'status': ContactStatus.online,
-        'messageType': 'New Message',
-      },
-      {'name': 'Sam Markets', 'status': ContactStatus.away},
-      {
-        'name': 'Jamie Forex',
-        'status': ContactStatus.offline,
-        'messageType': 'Question',
-      },
-    ],
-    'Analysts': [
-      {'name': 'Rachel Finance', 'status': ContactStatus.online},
-      {'name': 'Mike Analyst', 'status': ContactStatus.offline},
-    ],
-    'Team': [
-      {
-        'name': 'Lisa Manager',
-        'status': ContactStatus.online,
-        'messageType': 'Follow-up',
-      },
-      {'name': 'John Dev', 'status': ContactStatus.away},
-      {'name': 'Sarah Design', 'status': ContactStatus.offline},
-    ],
-    'Other': [
-      {'name': 'Info', 'status': ContactStatus.online},
-      {'name': 'Gallery', 'status': ContactStatus.online},
-      {
-        'name': 'Support',
-        'status': ContactStatus.online,
-        'messageType': 'Urgent',
-      },
-    ],
+  // Contact groups
+  final Map<String, List<ContactModel>> _contactGroups = {
+    'Favorites': [],
+    'Trading': [],
+    'Analysts': [],
+    'Team': [],
+    'Other': [],
   };
 
   // All contacts in a flat list for searching
   List<Map<String, dynamic>> _allContacts = [];
 
   late UserService _userService;
+  late ContactsService _contactsService;
 
   @override
   void initState() {
     super.initState();
-    // Flatten contacts for search functionality
-    for (var group in _contactGroups.values) {
-      _allContacts.addAll(group);
-    }
     _searchController.addListener(_onSearchChanged);
 
     // Initialize pulse animation for status indicators
@@ -104,6 +66,8 @@ class _ContactsScreenState extends State<ContactsScreen>
     );
 
     _userService = UserService();
+    _contactsService = ContactsService();
+    _loadContacts();
   }
 
   @override
@@ -164,6 +128,17 @@ class _ContactsScreenState extends State<ContactsScreen>
     setState(() {
       _searchResults = results;
     });
+  }
+
+  Future<void> _loadContacts() async {
+    // Load contacts for each group
+    for (final group in _contactGroups.keys) {
+      _contactsService.getContactsByGroup(group).listen((contacts) {
+        setState(() {
+          _contactGroups[group] = contacts;
+        });
+      });
+    }
   }
 
   @override
@@ -349,18 +324,16 @@ class _ContactsScreenState extends State<ContactsScreen>
                   count: contactsInGroup.length,
                 ),
                 ...contactsInGroup.map((contact) {
-                  final isOnline = contact['status'] == ContactStatus.online;
-                  final messageType = contact['messageType'] as String?;
                   return ContactItem(
                     contact: Contact(
-                      id: contact['name'],
-                      name: contact['name'],
-                      address: "",
+                      id: contact.id,
+                      name: contact.name,
+                      address: contact.address,
                       isFavorite: groupName == 'Favorites',
                     ),
-                    status: contact['status'] as ContactStatus,
-                    messageType: messageType,
-                    onTap: () => _navigateToChat(context, contact['name']),
+                    status: contact.status,
+                    messageType: contact.messageType,
+                    onTap: () => _navigateToChat(context, contact.name),
                   );
                 }),
                 const SizedBox(height: 16),
@@ -373,44 +346,119 @@ class _ContactsScreenState extends State<ContactsScreen>
   }
 
   void _navigateToChat(BuildContext context, String contactName) async {
-    // For now, we'll use demoRoom for sample contacts
-    // In a real app, we'd have real users associated with contacts
-
-    // Try to find a real user with this name - this is just a simple demo approach
-    // In a real app, you'd have proper contact-to-user mapping
     try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      // First try to find a real user with this name
       final userService = UserService();
       final users = await userService.searchUsers(contactName);
 
+      // Get current user
+      final currentUser = await userService.currentUser;
+      if (currentUser == null) {
+        throw Exception('You must be logged in to start a chat');
+      }
+
+      // Initialize chat service
+      final chatService = ChatService();
+      String? chatRoomId;
+
       if (users.isNotEmpty) {
-        // We found a real user, start a proper chat
-        await _startChatWithUser(users.first);
+        // We found a real user, create or find a private chat with them
+        chatRoomId = await chatService.findOrCreatePrivateChatRoom(
+          otherUserId: users.first.id,
+          otherUserName: users.first.name,
+        );
       } else {
-        // No real user found, use demo room
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder:
-                  (context) => ChatScreen(
-                    contactName: contactName,
-                    chatRoomId: 'demoRoom',
-                  ),
+        // Check if user has enough tokens for creating a room
+        final tokenBalance = await chatService.getUserTokenBalance();
+        if (tokenBalance < ChatRoom.createRoomTokenCost) {
+          if (mounted) {
+            Navigator.pop(context); // Close loading dialog
+            NotEnoughTokensDialog.show(
+              context: context,
+              requiredTokens: ChatRoom.createRoomTokenCost,
+              currentTokens: tokenBalance,
+              onBuyTokens: () {
+                // Handle token purchase (implement this later)
+              },
+            );
+          }
+          return;
+        }
+
+        // No real user found, create a private chat room with the contact
+        chatRoomId = await chatService.createChatRoom(
+          name: contactName,
+          memberIds: [currentUser.id],
+          isPublic: false,
+        );
+      }
+      
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      if (chatRoomId != null && mounted) {
+        // Show a success message for creating a new chat
+        if (users.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Created new chat with $contactName'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
             ),
           );
         }
-      }
-    } catch (e) {
-      // On error, fall back to demo room
-      if (mounted) {
+        
+        // Navigate to chat screen with the room ID
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder:
-                (context) => ChatScreen(
-                  contactName: contactName,
-                  chatRoomId: 'demoRoom',
-                ),
+            builder: (context) => ChatScreen(
+              contactName: contactName,
+              chatRoomId: chatRoomId!,
+            ),
+          ),
+        );
+      } else if (mounted) {
+        // If we couldn't create a chat room, create a demo one instead
+        final demoRoomId = "demoRoom";
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Using demo mode for this chat'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              contactName: contactName,
+              chatRoomId: demoRoomId,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if error occurs
+      if (mounted) {
+        Navigator.pop(context);
+
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString().split(': ').last}'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -521,12 +569,34 @@ class _ContactsScreenState extends State<ContactsScreen>
     );
   }
 
-  void _addContact(String name, String group) {
-    setState(() {
-      final newContact = {'name': name, 'status': ContactStatus.offline};
-      _contactGroups[group]!.add(newContact);
-      _allContacts.add(newContact);
-    });
+  void _addContact(String name, String group) async {
+    try {
+      // Create a new contact model
+      final contact = ContactModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: name,
+        address: "",
+        status: ContactStatus.offline,
+      );
+
+      // Save to Firebase
+      await _contactsService.saveContact(contact, group);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contact added successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding contact: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _navigateToInviteFriends(BuildContext context) {
@@ -580,62 +650,6 @@ class _ContactsScreenState extends State<ContactsScreen>
     }).toList();
   }
 
-  Future<void> _startChatWithUser(UserModel user) async {
-    final chatService = ChatService();
-
-    try {
-      // Show loading indicator
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
-
-      // Find or create a private chat room
-      final chatRoomId = await chatService.findOrCreatePrivateChatRoom(
-        otherUserId: user.id,
-        otherUserName: user.name,
-      );
-
-      // Close loading dialog
-      if (mounted) {
-        Navigator.pop(context);
-      }
-
-      if (chatRoomId != null && mounted) {
-        // Navigate to chat screen with the room ID
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder:
-                (context) =>
-                    ChatScreen(contactName: user.name, chatRoomId: chatRoomId),
-          ),
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to create chat room. Please try again.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      // Close loading dialog if error occurs
-      if (mounted) {
-        Navigator.pop(context);
-
-        // Show error message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString().split(': ').last}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   Widget _buildUserSearchResults() {
     return _searchResults.isEmpty
         ? Center(
@@ -658,12 +672,12 @@ class _ContactsScreenState extends State<ContactsScreen>
               contact: Contact(
                 id: user.id,
                 name: user.name,
-                address: "",
+                address: user.email ?? "",
                 isFavorite: false,
               ),
               status: ContactStatus.online,
               messageType: null,
-              onTap: () => _startChatWithUser(user),
+              onTap: () => _navigateToChat(context, user.name),
             );
           },
         );
