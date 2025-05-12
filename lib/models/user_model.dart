@@ -8,6 +8,10 @@ class UserModel {
   final DateTime? lastLogin;
   final int tokens;
   final bool isSystemBot;
+  final String? description;
+  final String? preferences;
+  final String? wants;
+  final String? needs;
 
   UserModel({
     required this.id,
@@ -17,6 +21,10 @@ class UserModel {
     this.lastLogin,
     this.tokens = 500,
     this.isSystemBot = false,
+    this.description,
+    this.preferences,
+    this.wants,
+    this.needs,
   });
 
   // Create from Firestore document
@@ -35,6 +43,10 @@ class UserModel {
       lastLogin: (data['lastLogin'] as Timestamp?)?.toDate(),
       tokens: data['tokens'] ?? 500,
       isSystemBot: data['isSystemBot'] ?? false,
+      description: data['description'],
+      preferences: data['preferences'],
+      wants: data['wants'],
+      needs: data['needs'],
     );
   }
 
@@ -53,6 +65,10 @@ class UserModel {
               : FieldValue.serverTimestamp(),
       'tokens': tokens,
       'isSystemBot': isSystemBot,
+      'description': description,
+      'preferences': preferences,
+      'wants': wants,
+      'needs': needs,
     };
   }
 
@@ -63,6 +79,10 @@ class UserModel {
     DateTime? lastLogin,
     int? tokens,
     bool? isSystemBot,
+    String? description,
+    String? preferences,
+    String? wants,
+    String? needs,
   }) {
     return UserModel(
       id: id,
@@ -72,6 +92,10 @@ class UserModel {
       lastLogin: lastLogin ?? this.lastLogin,
       tokens: tokens ?? this.tokens,
       isSystemBot: isSystemBot ?? this.isSystemBot,
+      description: description ?? this.description,
+      preferences: preferences ?? this.preferences,
+      wants: wants ?? this.wants,
+      needs: needs ?? this.needs,
     );
   }
 }

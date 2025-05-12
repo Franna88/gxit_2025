@@ -48,9 +48,10 @@ class ChatMessage {
     );
   }
 
-  // Convert to map for Firestore
+  // Convert to map for Firestore and local storage
   Map<String, dynamic> toMap() {
     return {
+      'id': id, // Make sure to include the ID for local storage
       'content': content,
       'senderId': senderId,
       'senderName': senderName,
@@ -60,6 +61,31 @@ class ChatMessage {
       'reactions': reactions,
       'tokenUsed': tokenUsed,
     };
+  }
+
+  // Create from JSON map (for local storage)
+  factory ChatMessage.fromMap(Map<String, dynamic> map) {
+    // Convert timestamp based on type
+    DateTime timestamp;
+    if (map['timestamp'] is Timestamp) {
+      timestamp = (map['timestamp'] as Timestamp).toDate();
+    } else if (map['timestamp'] is int) {
+      timestamp = DateTime.fromMillisecondsSinceEpoch(map['timestamp']);
+    } else {
+      timestamp = DateTime.now();
+    }
+    
+    return ChatMessage(
+      id: map['id'] ?? '',
+      content: map['content'] ?? '',
+      senderId: map['senderId'] ?? '',
+      senderName: map['senderName'] ?? '',
+      chatRoomId: map['chatRoomId'] ?? '',
+      timestamp: timestamp,
+      mood: map['mood'] != null ? MoodType.values[map['mood']] : null,
+      reactions: map['reactions'] != null ? List<String>.from(map['reactions']) : null,
+      tokenUsed: map['tokenUsed'] ?? false,
+    );
   }
 
   // Create updated message

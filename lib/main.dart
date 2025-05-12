@@ -12,6 +12,10 @@ import 'services/app_startup_service.dart';
 import 'services/lifecycle_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/self_description_screen.dart';
+import 'screens/preferences_screen.dart';
+import 'screens/wants_screen.dart';
+import 'screens/needs_screen.dart';
 
 // Initialize a global instance that can be accessed from anywhere
 final appStartupService = AppStartupService();
@@ -213,10 +217,22 @@ class MainApp extends StatelessWidget {
             future: () async {
               try {
                 await userService.ensureUserExists(user);
-                return true;
+                
+                // Check if user has completed all required steps
+                final hasDescription = await userService.hasCompletedSelfDescription(user.uid);
+                final hasPreferences = await userService.hasCompletedPreferences(user.uid);
+                final hasWants = await userService.hasCompletedWants(user.uid);
+                final hasNeeds = await userService.hasCompletedNeeds(user.uid);
+                return {
+                  'success': true,
+                  'hasDescription': hasDescription,
+                  'hasPreferences': hasPreferences,
+                  'hasWants': hasWants,
+                  'hasNeeds': hasNeeds,
+                };
               } catch (e) {
                 print('Error ensuring user exists: $e');
-                return false;
+                return {'success': false};
               }
             }(),
             builder: (context, ensureSnapshot) {
@@ -227,7 +243,9 @@ class MainApp extends StatelessWidget {
               }
 
               // Check if there was an error while ensuring user exists
-              if (ensureSnapshot.hasError || ensureSnapshot.data == false) {
+              if (ensureSnapshot.hasError || 
+                  ensureSnapshot.data == null || 
+                  ensureSnapshot.data!['success'] == false) {
                 return Scaffold(
                   body: Center(
                     child: Column(
@@ -285,7 +303,27 @@ class MainApp extends StatelessWidget {
                 );
               }
 
-              // After ensuring the user exists in Firestore, show home screen
+              // Check if user needs to complete self-description
+              if (ensureSnapshot.data!['hasDescription'] == false) {
+                return SelfDescriptionScreen(userId: user.uid);
+              }
+              
+              // Check if user needs to complete preferences
+              if (ensureSnapshot.data!['hasPreferences'] == false) {
+                return PreferencesScreen(userId: user.uid);
+              }
+              
+              // Check if user needs to complete wants
+              if (ensureSnapshot.data!['hasWants'] == false) {
+                return WantsScreen(userId: user.uid);
+              }
+              
+              // Check if user needs to complete needs
+              if (ensureSnapshot.data!['hasNeeds'] == false) {
+                return NeedsScreen(userId: user.uid);
+              }
+
+              // After ensuring the user has completed all steps, show home screen
               return const HomeScreen();
             },
           );
