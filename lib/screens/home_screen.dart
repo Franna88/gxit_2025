@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../constants.dart';
+import '../services/user_service.dart';
+import '../models/user_model.dart';
 import '../widgets/chat_summary_card.dart';
 import '../widgets/important_message_card.dart';
 import '../widgets/activity_card.dart';
@@ -22,6 +24,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
+  final UserService _userService = UserService();
+  UserModel? currentUser;
 
   // Particle system
   final List<Particle> _particles = [];
@@ -34,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _loadCurrentUser();
 
     // Initialize particles
     final random = math.Random();
@@ -64,6 +69,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Future.delayed(Duration.zero, () {
       _startParticleAnimation();
     });
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final user = await _userService.getCurrentUser();
+    if (mounted) {
+      setState(() {
+        currentUser = user;
+      });
+    }
   }
 
   void _startParticleAnimation() {
@@ -218,7 +232,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         animation: _pulseController,
                         builder: (context, child) {
                           return Text(
-                            'WELCOME TO THE GRID, USER',
+                            'WELCOME TO THE GRID, ${currentUser?.name}',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,

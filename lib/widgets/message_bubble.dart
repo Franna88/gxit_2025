@@ -3,18 +3,82 @@ import 'package:intl/intl.dart';
 import '../constants.dart';
 import '../screens/chat_screen.dart';
 import '../models/user_mood.dart';
-import 'mood_visualizer.dart';
 
 class MessageBubble extends StatelessWidget {
   final Message message;
-  final Function(String)? onReactionTap;
+  final bool isCurrentUser;
 
-  const MessageBubble({super.key, required this.message, this.onReactionTap});
+  const MessageBubble({
+    super.key, 
+    required this.message, 
+    required this.isCurrentUser,
+  });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is MessageBubble &&
+        other.message.id == message.id &&
+        other.message.content == message.content &&
+        other.isCurrentUser == isCurrentUser;
+  }
+
+  @override
+  int get hashCode => Object.hash(message.id, message.content, isCurrentUser);
+
+  Color _getMoodColor(MoodType? mood) {
+    if (mood == null) return Colors.grey;
+    
+    switch (mood) {
+      case MoodType.happy:
+        return Colors.amber;
+      case MoodType.excited:
+        return AppColors.primaryPurple;
+      case MoodType.calm:
+        return AppColors.primaryBlue;
+      case MoodType.bored:
+        return Colors.grey;
+      case MoodType.annoyed:
+        return AppColors.primaryOrange;
+      case MoodType.angry:
+        return Colors.red;
+      case MoodType.sad:
+        return Colors.blueGrey;
+      case MoodType.neutral:
+      default:
+        return Colors.teal;
+    }
+  }
+
+  IconData _getMoodIcon(MoodType? mood) {
+    if (mood == null) return Icons.sentiment_neutral;
+    
+    switch (mood) {
+      case MoodType.happy:
+        return Icons.sentiment_satisfied;
+      case MoodType.excited:
+        return Icons.sentiment_very_satisfied;
+      case MoodType.calm:
+        return Icons.sentiment_neutral;
+      case MoodType.bored:
+        return Icons.sentiment_neutral;
+      case MoodType.annoyed:
+        return Icons.sentiment_dissatisfied;
+      case MoodType.angry:
+        return Icons.sentiment_very_dissatisfied;
+      case MoodType.sad:
+        return Icons.sentiment_dissatisfied;
+      case MoodType.neutral:
+      default:
+        return Icons.sentiment_neutral;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final timeFormat = DateFormat('h:mm a');
+    final moodColor = _getMoodColor(message.mood);
 
     return Column(
       crossAxisAlignment:
@@ -32,11 +96,15 @@ class MessageBubble extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: message.mood.color,
+                    color: moodColor,
                   ),
                 ),
                 const SizedBox(width: 4),
-                MoodIcon(mood: message.mood, size: 16),
+                Icon(
+                  _getMoodIcon(message.mood),
+                  color: moodColor,
+                  size: 16,
+                ),
               ],
             ),
           ),
@@ -52,9 +120,7 @@ class MessageBubble extends StatelessWidget {
           decoration: BoxDecoration(
             color:
                 message.isMe
-                    ? message
-                        .mood
-                        .color // Use solid color for user messages
+                    ? moodColor.withOpacity(0.8) // Use solid color for user messages
                     : isDarkMode
                     ? const Color(0xFF2A2E3A) // Dark gray for received messages
                     : Colors.grey.shade200, // Light gray for received messages
@@ -91,10 +157,14 @@ class MessageBubble extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    if (!message.isMe && message.mood.type != MoodType.neutral)
+                    if (!message.isMe && message.mood != null && message.mood != MoodType.neutral)
                       Padding(
                         padding: const EdgeInsets.only(right: 6.0),
-                        child: MoodIcon(mood: message.mood, size: 14),
+                        child: Icon(
+                          _getMoodIcon(message.mood),
+                          color: moodColor,
+                          size: 14,
+                        ),
                       ),
                     Text(
                       timeFormat.format(message.timestamp),
@@ -129,7 +199,7 @@ class MessageBubble extends StatelessWidget {
               children:
                   message.reactions!.map((reaction) {
                     return GestureDetector(
-                      onTap: () => onReactionTap?.call(reaction),
+                      onTap: null,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
