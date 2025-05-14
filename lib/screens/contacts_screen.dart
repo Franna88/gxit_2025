@@ -465,7 +465,8 @@ class _ContactsScreenState extends State<ContactsScreen>
       
       // If we have an existing chat room ID, navigate directly to that chat
       if (existingContact != null && existingContact.chatRoomId != null) {
-        Navigator.push(
+        // Use pushReplacement to avoid back button issues
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => ChatScreen(
@@ -816,7 +817,8 @@ class _ContactsScreenState extends State<ContactsScreen>
         // If accepted, navigate to the chat
         if (accept && chatRoomId != null && roomName.isNotEmpty) {
           print("Navigating to chat: $roomName, $chatRoomId");
-          Navigator.push(
+          // Use pushReplacement to avoid back button issues
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (context) => ChatScreen(

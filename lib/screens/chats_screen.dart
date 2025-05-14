@@ -236,17 +236,37 @@ class _ChatsScreenState extends State<ChatsScreen>
   }
 
   void _navigateToChat(BuildContext context, String name, String roomId) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ChatScreen(contactName: name, chatRoomId: roomId),
-      ),
-    ).then((_) {
-      // Refresh room list when returning from chat screen
-      if (mounted) {
-        _loadChatRooms();
-      }
-    });
+    // Use pushReplacement if coming from a dialog or another temporary screen
+    // This prevents the back button from re-entering the chat room
+    final currentRoute = ModalRoute.of(context);
+    final isDialog = currentRoute?.settings.name == null || currentRoute!.settings.name!.isEmpty;
+    
+    if (isDialog) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(contactName: name, chatRoomId: roomId),
+        ),
+      ).then((_) {
+        // Refresh room list when returning from chat screen
+        if (mounted) {
+          _loadChatRooms();
+        }
+      });
+    } else {
+      // Standard navigation for normal screens
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(contactName: name, chatRoomId: roomId),
+        ),
+      ).then((_) {
+        // Refresh room list when returning from chat screen
+        if (mounted) {
+          _loadChatRooms();
+        }
+      });
+    }
   }
 
   void _onHover(int index, bool isHovering) {

@@ -346,7 +346,13 @@ class _ChatScreenState extends State<ChatScreen> {
         return WillPopScope(
           onWillPop: () async {
             // Return true to allow back navigation to work properly
-            return true;
+            // Make sure we're really popping and not being pushed back immediately
+            if (Navigator.of(context).canPop()) {
+              return true;
+            }
+            // If we can't pop, make sure we explicitly exit the screen
+            Navigator.of(context).pushReplacementNamed('/home');
+            return false;
           },
           child: Scaffold(
             appBar: AppBar(
@@ -354,7 +360,14 @@ class _ChatScreenState extends State<ChatScreen> {
               elevation: 0,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  // Handle back button explicitly to ensure proper navigation
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    Navigator.of(context).pushReplacementNamed('/home');
+                  }
+                },
               ),
               title: Row(
                 children: [

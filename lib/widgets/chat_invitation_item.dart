@@ -124,7 +124,7 @@ class _ChatInvitationItemState extends State<ChatInvitationItem> {
 
       if (success && mounted) {
         // Navigate to the chat room
-        Navigator.push(
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder:
