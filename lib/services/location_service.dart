@@ -343,6 +343,8 @@ class LocationService {
           await _firestore
               .collection('areaChatRooms')
               .where('isOfficial', isEqualTo: true)
+              // Explicitly exclude direct messages
+              .where('isDirectMessage', isEqualTo: false)
               .orderBy('createdAt', descending: true)
               .get();
 
@@ -383,6 +385,11 @@ class LocationService {
         chatRooms =
             regularRoomsSnapshot.docs.map((doc) {
               final chatRoom = ChatRoom.fromFirestore(doc);
+              
+              // Skip direct messages - they should only appear in Contacts > Active Chats
+              if (chatRoom.isDirectMessage) {
+                return null;
+              }
 
               // Create a pseudo area chat room
               return AreaChatRoom(
@@ -399,8 +406,13 @@ class LocationService {
                 isPublic: chatRoom.isPublic,
                 creatorId: chatRoom.creatorId,
                 createdAt: chatRoom.createdAt,
+                isDirectMessage: chatRoom.isDirectMessage,
+                participantIds: chatRoom.participantIds,
               );
-            }).toList();
+            })
+            .where((room) => room != null)
+            .cast<AreaChatRoom>()
+            .toList();
       }
 
       // Get area chat rooms that are private and the user is a member
@@ -409,6 +421,8 @@ class LocationService {
               .collection('areaChatRooms')
               .where('memberIds', arrayContains: userId)
               .where('isPublic', isEqualTo: false)
+              // Explicitly exclude direct messages
+              .where('isDirectMessage', isEqualTo: false)
               .orderBy('lastActivity', descending: true)
               .get();
 
@@ -498,6 +512,8 @@ class LocationService {
           .collection('areaChatRooms')
           .where('isPublic', isEqualTo: true)
           .where('isOfficial', isEqualTo: false)
+          // Explicitly exclude direct messages
+          .where('isDirectMessage', isEqualTo: false)
           .orderBy('createdAt', descending: true)
           .get();
           

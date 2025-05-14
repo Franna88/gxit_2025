@@ -27,6 +27,8 @@ class AreaChatRoom extends ChatRoom {
     bool isPublic = true,
     String? creatorId,
     DateTime? createdAt,
+    bool isDirectMessage = false,
+    List<String>? participantIds,
   }) : super(
          id: id,
          name: name,
@@ -38,6 +40,8 @@ class AreaChatRoom extends ChatRoom {
          isPublic: isPublic,
          creatorId: creatorId,
          createdAt: createdAt,
+         isDirectMessage: isDirectMessage,
+         participantIds: participantIds,
        );
 
   // Create from Firestore document
@@ -76,6 +80,8 @@ class AreaChatRoom extends ChatRoom {
       isPublic: chatRoom.isPublic,
       creatorId: chatRoom.creatorId,
       createdAt: chatRoom.createdAt,
+      isDirectMessage: chatRoom.isDirectMessage,
+      participantIds: chatRoom.participantIds,
     );
   }
 

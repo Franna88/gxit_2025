@@ -358,4 +358,15 @@ class UserService {
     
     return UserModel.fromFirestore(doc);
   }
+
+  // Check if a user is online (placeholder implementation - would need a real presence system)
+  bool isUserOnline(String userId) {
+    // In a real app, this would check against a presence system
+    // For now, we'll just return a placeholder value
+    // You would typically use a system that tracks user activity timestamps
+    // or uses a real-time presence system like Firebase Realtime Database
+    
+    // For demonstration purposes only
+    return userId.isNotEmpty; // Consider all valid users as online
+  }
 }

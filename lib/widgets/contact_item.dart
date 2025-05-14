@@ -124,11 +124,52 @@ class ContactItem extends StatelessWidget {
                 ),
               ),
 
-            // Favorite icon if applicable
+            // Enhanced invitation indicator
             if (contact.isFavorite)
-              Icon(Icons.star, color: AppColors.primaryYellow, size: 20),
+              _buildInviteIndicator(context),
           ],
         ),
+      ),
+    );
+  }
+
+  // New method to build an enhanced invite indicator
+  Widget _buildInviteIndicator(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.primaryOrange.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.primaryOrange,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryOrange.withOpacity(0.4),
+            blurRadius: 6,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.notifications_active,
+            color: AppColors.primaryOrange,
+            size: 16,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Invite',
+            style: TextStyle(
+              color: AppColors.primaryOrange,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }

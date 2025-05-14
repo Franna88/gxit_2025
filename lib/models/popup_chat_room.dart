@@ -44,6 +44,8 @@ class PopupChatRoom extends ChatRoom {
     DateTime? closedAt,
     DateTime? expiresAt,
     String? closedBy,
+    bool isDirectMessage = false,
+    List<String>? participantIds,
     required this.scheduledTime,
     this.openWaitingRoomTime,
     this.startTime,
@@ -71,6 +73,8 @@ class PopupChatRoom extends ChatRoom {
          closedAt: closedAt,
          expiresAt: expiresAt,
          closedBy: closedBy,
+         isDirectMessage: isDirectMessage,
+         participantIds: participantIds,
        );
 
   // Create from Firestore document
@@ -96,6 +100,8 @@ class PopupChatRoom extends ChatRoom {
       closedAt: (data['closedAt'] as Timestamp?)?.toDate(),
       expiresAt: (data['expiresAt'] as Timestamp?)?.toDate(),
       closedBy: data['closedBy'],
+      isDirectMessage: data['isDirectMessage'] ?? false,
+      participantIds: data['participantIds'] != null ? List<String>.from(data['participantIds']) : null,
       scheduledTime: (data['scheduledTime'] as Timestamp).toDate(),
       openWaitingRoomTime:
           (data['openWaitingRoomTime'] as Timestamp?)?.toDate(),
@@ -197,6 +203,7 @@ class PopupChatRoom extends ChatRoom {
   bool get isWaitingListFull => waitingUsers.length >= maxCapacity;
 
   // Create updated popup chat room
+  @override
   PopupChatRoom copyWith({
     String? id,
     String? name,
@@ -212,6 +219,8 @@ class PopupChatRoom extends ChatRoom {
     DateTime? closedAt,
     DateTime? expiresAt,
     String? closedBy,
+    bool? isDirectMessage,
+    List<String>? participantIds,
     DateTime? scheduledTime,
     DateTime? openWaitingRoomTime,
     DateTime? startTime,
@@ -240,6 +249,8 @@ class PopupChatRoom extends ChatRoom {
       closedAt: closedAt ?? this.closedAt,
       expiresAt: expiresAt ?? this.expiresAt,
       closedBy: closedBy ?? this.closedBy,
+      isDirectMessage: isDirectMessage ?? super.isDirectMessage,
+      participantIds: participantIds ?? super.participantIds,
       scheduledTime: scheduledTime ?? this.scheduledTime,
       openWaitingRoomTime: openWaitingRoomTime ?? this.openWaitingRoomTime,
       startTime: startTime ?? this.startTime,

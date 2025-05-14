@@ -13,6 +13,7 @@ class ContactModel {
   final String? email;
   final ContactStatus status;
   final String? messageType;
+  final String? chatRoomId;
 
   ContactModel({
     required this.id,
@@ -25,6 +26,7 @@ class ContactModel {
     this.email,
     this.status = ContactStatus.offline,
     this.messageType,
+    this.chatRoomId,
   });
 
   ContactModel copyWith({
@@ -38,6 +40,7 @@ class ContactModel {
     String? email,
     ContactStatus? status,
     String? messageType,
+    String? chatRoomId,
   }) {
     return ContactModel(
       id: id ?? this.id,
@@ -50,6 +53,7 @@ class ContactModel {
       email: email ?? this.email,
       status: status ?? this.status,
       messageType: messageType ?? this.messageType,
+      chatRoomId: chatRoomId ?? this.chatRoomId,
     );
   }
 
@@ -68,6 +72,7 @@ class ContactModel {
       email: json['email'] as String?,
       status: _parseStatus(json['status']),
       messageType: json['messageType'] as String?,
+      chatRoomId: json['chatRoomId'] as String?,
     );
   }
 
@@ -102,6 +107,7 @@ class ContactModel {
       'email': email,
       'status': status.index,
       'messageType': messageType,
+      'chatRoomId': chatRoomId,
     };
   }
 
@@ -110,6 +116,7 @@ class ContactModel {
     Contact contact, {
     ContactStatus status = ContactStatus.offline,
     String? messageType,
+    String? chatRoomId,
   }) {
     return ContactModel(
       id: contact.id,
@@ -122,6 +129,7 @@ class ContactModel {
       email: contact.email,
       status: status,
       messageType: messageType,
+      chatRoomId: chatRoomId,
     );
   }
 }

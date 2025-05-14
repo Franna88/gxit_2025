@@ -93,16 +93,10 @@ class ContactGroupHeader extends StatelessWidget {
 
   Color _getNeonColor(String groupName) {
     switch (groupName) {
-      case 'Favorites':
+      case 'Chat Invites':
         return AppColors.primaryYellow;
-      case 'Trading':
+      case 'Active Chats':
         return AppColors.primaryBlue;
-      case 'Analysts':
-        return AppColors.primaryGreen;
-      case 'Team':
-        return AppColors.primaryPurple;
-      case 'Other':
-        return AppColors.primaryOrange;
       default:
         return AppColors.primaryBlue;
     }

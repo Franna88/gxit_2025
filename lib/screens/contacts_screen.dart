@@ -13,6 +13,7 @@ import '../services/user_service.dart';
 import '../services/contacts_service.dart';
 import '../widgets/not_enough_tokens_dialog.dart';
 import '../models/chat_room.dart';
+import '../models/chat_invitation.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -37,11 +38,8 @@ class _ContactsScreenState extends State<ContactsScreen>
 
   // Contact groups
   final Map<String, List<ContactModel>> _contactGroups = {
-    'Favorites': [],
-    'Trading': [],
-    'Analysts': [],
-    'Team': [],
-    'Other': [],
+    'Chat Invites': [],
+    'Active Chats': [],
   };
 
   // All contacts in a flat list for searching
@@ -49,6 +47,7 @@ class _ContactsScreenState extends State<ContactsScreen>
 
   late UserService _userService;
   late ContactsService _contactsService;
+  late ChatService _chatService;
 
   @override
   void initState() {
@@ -67,7 +66,10 @@ class _ContactsScreenState extends State<ContactsScreen>
 
     _userService = UserService();
     _contactsService = ContactsService();
+    _chatService = ChatService();
     _loadContacts();
+    _loadChatInvitations();
+    _loadDirectMessageChats();
   }
 
   @override
@@ -133,12 +135,108 @@ class _ContactsScreenState extends State<ContactsScreen>
   Future<void> _loadContacts() async {
     // Load contacts for each group
     for (final group in _contactGroups.keys) {
-      _contactsService.getContactsByGroup(group).listen((contacts) {
-        setState(() {
-          _contactGroups[group] = contacts;
+      if (group != 'Chat Invites') { // Skip Chat Invites as we'll handle them separately
+        _contactsService.getContactsByGroup(group).listen((contacts) {
+          setState(() {
+            _contactGroups[group] = contacts;
+          });
         });
-      });
+      }
     }
+  }
+
+  // Load chat invitations from ChatService
+  void _loadChatInvitations() {
+    _chatService.getChatInvitations().listen((invitations) {
+      final inviteContacts = invitations.map((invite) => 
+        ContactModel(
+          id: invite.id,
+          name: invite.roomName,
+          address: "Chat invitation from ${invite.inviterId}",
+          status: ContactStatus.online,
+          messageType: "Invitation",
+        )
+      ).toList();
+      
+      setState(() {
+        _contactGroups['Chat Invites'] = inviteContacts;
+      });
+    });
+  }
+
+  // Load direct message chats into Active Chats section
+  void _loadDirectMessageChats() {
+    final userId = _chatService.currentUserId;
+    if (userId == null) return;
+    
+    _chatService.getDirectMessageChatsStream(userId).listen((chats) {
+      final directMessageContacts = chats.map((chat) {
+        // For direct messages, we want to show the other user's name
+        String displayName = chat.name;
+        
+        // Fix for "new people" or empty room names
+        if (displayName.toLowerCase() == "new people" || displayName.trim().isEmpty) {
+          displayName = "Chat Contact"; // Default fallback, this will be replaced once we get user info
+        }
+        
+        // If we have participant IDs, try to get other user's name
+        if (chat.participantIds != null && chat.participantIds!.length == 2) {
+          // Filter out current user ID to get other participant
+          final otherUserId = chat.participantIds!.firstWhere(
+            (id) => id != userId,
+            orElse: () => '', // Fallback if somehow we don't find another user
+          );
+          
+          if (otherUserId.isNotEmpty) {
+            _userService.getUser(otherUserId).then((otherUser) {
+              if (otherUser != null && mounted) {
+                // Update contact with real name if we have it
+                setState(() {
+                  final index = _contactGroups['Active Chats']?.indexWhere(
+                    (contact) => contact.id == chat.id
+                  ) ?? -1;
+                  
+                  if (index >= 0) {
+                    _contactGroups['Active Chats']![index] = ContactModel(
+                      id: chat.id,
+                      name: otherUser.name,
+                      address: chat.lastMessage ?? "Start chatting now",
+                      status: _userService.isUserOnline(otherUserId) 
+                          ? ContactStatus.online 
+                          : ContactStatus.offline,
+                      messageType: "Direct Message",
+                      chatRoomId: chat.id,
+                    );
+                  }
+                });
+              }
+            });
+          }
+        }
+        
+        return ContactModel(
+          id: chat.id,
+          name: displayName,
+          address: chat.lastMessage ?? "Start chatting now",
+          status: ContactStatus.online,
+          messageType: "Direct Message",
+          chatRoomId: chat.id,
+        );
+      }).toList();
+      
+      setState(() {
+        // Merge with existing contacts in Active Chats
+        final existingContacts = _contactGroups['Active Chats'] ?? [];
+        
+        // Filter out existing direct message contacts (to avoid duplicates)
+        final nonDirectMessageContacts = existingContacts
+            .where((contact) => contact.messageType != "Direct Message")
+            .toList();
+        
+        // Add direct message contacts
+        _contactGroups['Active Chats'] = [...nonDirectMessageContacts, ...directMessageContacts];
+      });
+    });
   }
 
   @override
@@ -172,7 +270,7 @@ class _ContactsScreenState extends State<ContactsScreen>
                   onSubmitted: _performSearch,
                 )
                 : const Text(
-                  'Contacts',
+                  'Chats',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
         leading:
@@ -329,7 +427,7 @@ class _ContactsScreenState extends State<ContactsScreen>
                       id: contact.id,
                       name: contact.name,
                       address: contact.address,
-                      isFavorite: groupName == 'Favorites',
+                      isFavorite: groupName == 'Chat Invites',
                     ),
                     status: contact.status,
                     messageType: contact.messageType,
@@ -347,6 +445,38 @@ class _ContactsScreenState extends State<ContactsScreen>
 
   void _navigateToChat(BuildContext context, String contactName) async {
     try {
+      // Check if it's a chat invitation
+      final invitationGroup = _contactGroups['Chat Invites'];
+      final isInvitation = invitationGroup?.any((contact) => contact.name == contactName) ?? false;
+      
+      if (isInvitation) {
+        // It's a chat invitation, show accept/decline dialog
+        final invitation = invitationGroup!.firstWhere((contact) => contact.name == contactName);
+        _showInvitationDialog(context, invitation);
+        return;
+      }
+      
+      // Check if it's an existing direct message chat in Active Chats
+      final activeChatsGroup = _contactGroups['Active Chats'];
+      final existingContact = activeChatsGroup?.firstWhere(
+        (contact) => contact.name == contactName && contact.chatRoomId != null,
+        orElse: () => ContactModel(id: '', name: '', address: ''),
+      );
+      
+      // If we have an existing chat room ID, navigate directly to that chat
+      if (existingContact != null && existingContact.chatRoomId != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              contactName: contactName,
+              chatRoomId: existingContact.chatRoomId!,
+            ),
+          ),
+        );
+        return;
+      }
+      
       // Show loading indicator
       showDialog(
         context: context,
@@ -368,18 +498,33 @@ class _ContactsScreenState extends State<ContactsScreen>
       final chatService = ChatService();
       String? chatRoomId;
 
-      if (users.isNotEmpty) {
-        // We found a real user, create or find a private chat with them
-        chatRoomId = await chatService.findOrCreatePrivateChatRoom(
-          otherUserId: users.first.id,
-          otherUserName: users.first.name,
-        );
-      } else {
-        // Check if user has enough tokens for creating a room
+      // Check if we are handling a user from search results
+      bool isFromSearchResults = false;
+      UserModel? selectedUser;
+      
+      // Check if this is a user from search results
+      if (_isSearchingUsers && _searchResults.isNotEmpty) {
+        // Look for a user with matching name in search results
+        for (final user in _searchResults) {
+          if (user.name == contactName) {
+            selectedUser = user;
+            isFromSearchResults = true;
+            break;
+          }
+        }
+      }
+
+      // Close loading indicator
+      Navigator.of(context, rootNavigator: true).pop();
+
+      if (isFromSearchResults && selectedUser != null) {
+        // This is a user from search results, create a new direct message room and invitation
+        final roomName = 'Chat with ${selectedUser.name}';
+        
+        // Check if we have enough tokens first
         final tokenBalance = await chatService.getUserTokenBalance();
         if (tokenBalance < ChatRoom.createRoomTokenCost) {
           if (mounted) {
-            Navigator.pop(context); // Close loading dialog
             NotEnoughTokensDialog.show(
               context: context,
               requiredTokens: ChatRoom.createRoomTokenCost,
@@ -391,61 +536,302 @@ class _ContactsScreenState extends State<ContactsScreen>
           }
           return;
         }
+        
+        // Create the room and invitation
+        try {
+          // Create a new chat room for direct messaging
+          chatRoomId = await chatService.createChatRoom(
+            name: roomName,
+            memberIds: [currentUser.id],
+            isPublic: false, // Direct messages are private
+            isDirectMessage: true, // Explicitly mark as a direct message
+          );
+          
+          if (chatRoomId != null) {
+            // Create invitation for the selected user
+            await chatService.inviteUsersToChatRoom(
+              roomId: chatRoomId,
+              userIds: [selectedUser.id],
+            );
+            
+            // Show success message and navigate to the chat
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Invitation sent to ${selectedUser.name}'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            
+            // Navigate to the new chat room
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatScreen(
+                  contactName: selectedUser!.name,
+                  chatRoomId: chatRoomId!,
+                ),
+              ),
+            );
+          }
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error sending invitation: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
 
-        // No real user found, create a private chat room with the contact
+      // If we get here, we're dealing with a contact that's not from search results
+      // Proceed with regular contact handling (existing code)
+      
+      if (users.isNotEmpty) {
+        // If there are multiple users with the same name, use the first one
+        final user = users.first;
+        
+        // Create a direct message room name
+        final roomName = 'Chat with ${user.name}';
+        
+        // Check if we have enough tokens
+        final tokenBalance = await chatService.getUserTokenBalance();
+        if (tokenBalance < ChatRoom.createRoomTokenCost) {
+          if (mounted) {
+            NotEnoughTokensDialog.show(
+              context: context,
+              requiredTokens: ChatRoom.createRoomTokenCost,
+              currentTokens: tokenBalance,
+              onBuyTokens: () {
+                // Handle token purchase (implement this later)
+              },
+            );
+          }
+          return;
+        }
+        
+        // Create a room and send invitation
+        chatRoomId = await chatService.createChatRoom(
+          name: roomName,
+          memberIds: [currentUser.id],
+          isPublic: false, // Direct messages are private
+          isDirectMessage: true, // Explicitly mark as a direct message
+        );
+        
+        if (chatRoomId != null) {
+          // Invite the user to this room
+          await chatService.inviteUsersToChatRoom(
+            roomId: chatRoomId,
+            userIds: [user.id],
+          );
+        }
+      } else {
+        // No real user found, create a placeholder contact
+        // This would be replaced with a real implementation that handles
+        // invitations to users who aren't on the platform yet
         chatRoomId = await chatService.createChatRoom(
           name: contactName,
           memberIds: [currentUser.id],
           isPublic: false,
+          isDirectMessage: true, // Explicitly mark as a direct message
         );
       }
       
+      if (chatRoomId != null) {
+        // Save this as a contact
+        final contact = ContactModel(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          name: contactName,
+          address: "",
+          status: ContactStatus.offline,
+          chatRoomId: chatRoomId,
+        );
+        
+        await _contactsService.saveContact(contact, 'Active Chats');
+        
+        // Navigate to the chat
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                contactName: contactName,
+                chatRoomId: chatRoomId!,
+              ),
+            ),
+          );
+        }
+      }
+
+      if (mounted) {
+        // Close loading indicator if still showing
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    } catch (e) {
+      // Close loading indicator if showing
+      Navigator.of(context, rootNavigator: true).pop();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString().split(': ').last}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Show dialog to accept or decline chat invitation
+  void _showInvitationDialog(BuildContext context, ContactModel invitation) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Chat Invitation: ${invitation.name}'),
+        content: const Text('Would you like to accept this chat invitation?'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _handleInvitationResponse(invitation.id, false);
+            },
+            child: const Text('DECLINE', style: TextStyle(color: Colors.red)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _handleInvitationResponse(invitation.id, true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+            ),
+            child: const Text('ACCEPT'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Handle accepting or declining an invitation
+  Future<void> _handleInvitationResponse(String invitationId, bool accept) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      bool success = false;
+      String? chatRoomId;
+      String roomName = '';
+      String inviterId = '';
+
+      if (accept) {
+        // Get invitation details before accepting (for chat navigation)
+        print("Fetching invitation details for ID: $invitationId");
+        final invitation = await _chatService.getChatInvitationById(invitationId);
+        
+        if (invitation == null) {
+          print("Error: Invitation not found with ID: $invitationId");
+          throw Exception('Invitation not found');
+        }
+        
+        print("Invitation found: roomId=${invitation.roomId}, roomName=${invitation.roomName}");
+        roomName = invitation.roomName;
+        chatRoomId = invitation.roomId;
+        inviterId = invitation.inviterId;
+        
+        // Accept the invitation
+        print("Accepting invitation: $invitationId");
+        success = await _chatService.acceptChatInvitation(invitationId);
+        print("Invitation acceptance result: $success");
+        
+        // If successful, add the chat to Active Chats
+        if (success && chatRoomId != null && roomName.isNotEmpty) {
+          // Get user info if possible for direct messages
+          String displayName = roomName;
+          ContactStatus status = ContactStatus.offline;
+          
+          // For direct messages, try to get the other user's information
+          if (invitation.isDirectMessage) {
+            try {
+              print("Getting user info for inviter: $inviterId");
+              final otherUser = await _userService.getUser(inviterId);
+              if (otherUser != null) {
+                displayName = otherUser.name;
+                status = _userService.isUserOnline(inviterId) 
+                    ? ContactStatus.online 
+                    : ContactStatus.offline;
+                print("Found user info: ${otherUser.name}");
+              } else {
+                print("Warning: User info not found for $inviterId, using room name instead");
+              }
+            } catch (e) {
+              print('Error getting user info: $e');
+              // Continue with room name as fallback
+            }
+          }
+          
+          try {
+            // Create contact model
+            final contact = ContactModel(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              name: displayName,
+              address: "New conversation",
+              status: status,
+              messageType: invitation.isDirectMessage ? "Direct Message" : "Group Chat",
+              chatRoomId: chatRoomId,
+            );
+            
+            // Save to Contact service
+            print("Saving contact to Active Chats");
+            await _contactsService.saveContact(contact, 'Active Chats');
+            print("Contact saved successfully");
+          } catch (e) {
+            print('Error saving contact: $e');
+            // We'll still try to navigate to the chat even if saving the contact fails
+          }
+        }
+      } else {
+        // Decline the invitation
+        success = await _chatService.declineChatInvitation(invitationId);
+      }
+
       // Close loading dialog
       if (mounted) {
         Navigator.pop(context);
       }
 
-      if (chatRoomId != null && mounted) {
-        // Show a success message for creating a new chat
-        if (users.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Created new chat with $contactName'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
+      if (success && mounted) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(accept ? 'Invitation accepted' : 'Invitation declined'),
+            backgroundColor: accept ? Colors.green : Colors.grey,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // If accepted, navigate to the chat
+        if (accept && chatRoomId != null && roomName.isNotEmpty) {
+          print("Navigating to chat: $roomName, $chatRoomId");
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                contactName: roomName,
+                chatRoomId: chatRoomId!,
+              ),
             ),
           );
         }
-        
-        // Navigate to chat screen with the room ID
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              contactName: contactName,
-              chatRoomId: chatRoomId!,
-            ),
-          ),
-        );
       } else if (mounted) {
-        // If we couldn't create a chat room, create a demo one instead
-        final demoRoomId = "demoRoom";
-        
+        // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Using demo mode for this chat'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              contactName: contactName,
-              chatRoomId: demoRoomId,
-            ),
+          SnackBar(
+            content: Text(accept ? 'Failed to accept invitation' : 'Failed to decline invitation'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -453,7 +839,7 @@ class _ContactsScreenState extends State<ContactsScreen>
       // Close loading dialog if error occurs
       if (mounted) {
         Navigator.pop(context);
-
+        
         // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -467,7 +853,7 @@ class _ContactsScreenState extends State<ContactsScreen>
 
   void _showAddContactDialog(BuildContext context) {
     final TextEditingController nameController = TextEditingController();
-    String selectedGroup = 'Other';
+    String selectedGroup = 'Active Chats';
 
     showDialog(
       context: context,

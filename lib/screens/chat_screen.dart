@@ -343,353 +343,374 @@ class _ChatScreenState extends State<ChatScreen> {
 
         final isAdmin = chatRoom.creatorId == _currentUserId;
 
-        return Scaffold(
-          appBar: AppBar(
-            backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
-            elevation: 0,
-            title: Row(
-              children: [
-                const Icon(Icons.person),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(chatRoom.name, overflow: TextOverflow.ellipsis),
+        return WillPopScope(
+          onWillPop: () async {
+            // Return true to allow back navigation to work properly
+            return true;
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              title: Row(
+                children: [
+                  const Icon(Icons.person),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      // Use the contact name from widget if any of these conditions are met:
+                      // 1. The chatRoom name is "new people"
+                      // 2. This is a direct message and the widget's contactName is specific
+                      // 3. The chatRoom name is empty or very generic
+                      (chatRoom.name.toLowerCase() == "new people" || 
+                       (chatRoom.isDirectMessage && widget.contactName.isNotEmpty && widget.contactName != "Chat") ||
+                       chatRoom.name.trim().isEmpty) 
+                          ? widget.contactName 
+                          : chatRoom.name,
+                      overflow: TextOverflow.ellipsis
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                // Invite users button (only visible for room creator/admin)
+                if (isAdmin)
+                  IconButton(
+                    icon: const Icon(Icons.person_add),
+                    tooltip: 'Invite Users',
+                    onPressed: () => _showInviteUsersDialog(context, chatRoom),
+                  ),
+                  
+                // Share Room ID button
+                IconButton(
+                  icon: const Icon(Icons.share),
+                  tooltip: 'Share Room ID',
+                  onPressed: () => _showShareRoomDialog(context, chatRoom),
+                ),
+                // Token balance
+                const Padding(
+                  padding: EdgeInsets.only(right: 8.0),
+                  child: TokenBalance(isCompact: true, showLabel: false),
                 ),
               ],
             ),
-            actions: [
-              // Invite users button (only visible for room creator/admin)
-              if (isAdmin)
-                IconButton(
-                  icon: const Icon(Icons.person_add),
-                  tooltip: 'Invite Users',
-                  onPressed: () => _showInviteUsersDialog(context, chatRoom),
+            body: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    isDarkMode ? AppColors.darkBackground : Colors.grey.shade100,
+                    isDarkMode
+                        ? AppColors.darkBackground.withOpacity(0.9)
+                        : Colors.white,
+                  ],
                 ),
-                
-              // Share Room ID button
-              IconButton(
-                icon: const Icon(Icons.share),
-                tooltip: 'Share Room ID',
-                onPressed: () => _showShareRoomDialog(context, chatRoom),
               ),
-              // Token balance
-              const Padding(
-                padding: EdgeInsets.only(right: 8.0),
-                child: TokenBalance(isCompact: true, showLabel: false),
-              ),
-            ],
-          ),
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  isDarkMode ? AppColors.darkBackground : Colors.grey.shade100,
-                  isDarkMode
-                      ? AppColors.darkBackground.withOpacity(0.9)
-                      : Colors.white,
-                ],
-              ),
-            ),
-            child: Column(
-              children: [
-                // Messages list
-                Expanded(
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _errorMessage != null
-                          ? Center(
-                              child: Text(
-                                _errorMessage!,
-                                style: const TextStyle(color: Colors.red),
-                              ),
-                            )
-                          : StreamBuilder<List<ChatMessage>>(
-                              key: ValueKey<String>('message_stream_${widget.chatRoomId}'),
-                              stream: _chatService.getChatMessagesStream(widget.chatRoomId),
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState == ConnectionState.waiting &&
-                                    _messages.isEmpty) {
-                                  return const Center(
-                                    child: CircularProgressIndicator(),
-                                  );
-                                }
-
-                                // Create a combined list that prioritizes snapshot data but falls back to local messages
-                                List<ChatMessage> combinedMessages = [];
-                                
-                                // First add messages from the stream if available
-                                if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                                  // Don't modify combinedMessages directly if it's the same as before
-                                  final newMessages = snapshot.data!;
-                                  
-                                  // Use our optimized method to check if we need to rebuild
-                                  final needsRebuild = _shouldRebuildMessagesList(_messages, newMessages);
-                                  
-                                  if (needsRebuild) {
-                                    combinedMessages.addAll(newMessages);
-                                    // Store latest message from each sender
-                                    _updateLatestUserMessages(newMessages);
-                                    
-                                    // Update _messages but avoid triggering a rebuild
-                                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                                      if (mounted) {
-                                        _messages.clear();
-                                        _messages.addAll(combinedMessages);
-                                      }
-                                    });
-                                  } else {
-                                    // If messages haven't changed, just use the existing list
-                                    combinedMessages.addAll(_messages);
+              child: Column(
+                children: [
+                  // Messages list
+                  Expanded(
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _errorMessage != null
+                            ? Center(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(color: Colors.red),
+                                ),
+                              )
+                            : StreamBuilder<List<ChatMessage>>(
+                                key: ValueKey<String>('message_stream_${widget.chatRoomId}'),
+                                stream: _chatService.getChatMessagesStream(widget.chatRoomId),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.waiting &&
+                                      _messages.isEmpty) {
+                                    return const Center(
+                                      child: CircularProgressIndicator(),
+                                    );
                                   }
-                                } else if (_messages.isNotEmpty) {
-                                  // If no stream data, use existing messages
-                                  debugPrint("Using local cached messages instead of empty stream data");
-                                  combinedMessages.addAll(_messages);
-                                  // Also store these in our latest messages map
-                                  _updateLatestUserMessages(_messages);
-                                }
-                                
-                                // Check for missing senders in this update
-                                if (snapshot.hasData && combinedMessages.isNotEmpty) {
-                                  // Get set of sender IDs in current messages
-                                  final currentSenderIds = combinedMessages.map((m) => m.senderId).toSet();
+
+                                  // Create a combined list that prioritizes snapshot data but falls back to local messages
+                                  List<ChatMessage> combinedMessages = [];
                                   
-                                  // Add back any missing user messages (like Betty's)
-                                  List<ChatMessage> missingMessages = [];
-                                  _latestUserMessages.forEach((senderId, message) {
-                                    if (!currentSenderIds.contains(senderId)) {
-                                      debugPrint("Re-adding message from missing sender: $senderId");
-                                      missingMessages.add(message);
+                                  // First add messages from the stream if available
+                                  if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                                    // Don't modify combinedMessages directly if it's the same as before
+                                    final newMessages = snapshot.data!;
+                                    
+                                    // Use our optimized method to check if we need to rebuild
+                                    final needsRebuild = _shouldRebuildMessagesList(_messages, newMessages);
+                                    
+                                    if (needsRebuild) {
+                                      combinedMessages.addAll(newMessages);
+                                      // Store latest message from each sender
+                                      _updateLatestUserMessages(newMessages);
+                                      
+                                      // Update _messages but avoid triggering a rebuild
+                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        if (mounted) {
+                                          _messages.clear();
+                                          _messages.addAll(combinedMessages);
+                                        }
+                                      });
+                                    } else {
+                                      // If messages haven't changed, just use the existing list
+                                      combinedMessages.addAll(_messages);
                                     }
-                                  });
+                                  } else if (_messages.isNotEmpty) {
+                                    // If no stream data, use existing messages
+                                    debugPrint("Using local cached messages instead of empty stream data");
+                                    combinedMessages.addAll(_messages);
+                                    // Also store these in our latest messages map
+                                    _updateLatestUserMessages(_messages);
+                                  }
                                   
-                                  // Add missing messages without rebuilding if possible
-                                  if (missingMessages.isNotEmpty) {
-                                    combinedMessages.addAll(missingMessages);
-                                    // Re-sort the messages by timestamp
-                                    combinedMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+                                  // Check for missing senders in this update
+                                  if (snapshot.hasData && combinedMessages.isNotEmpty) {
+                                    // Get set of sender IDs in current messages
+                                    final currentSenderIds = combinedMessages.map((m) => m.senderId).toSet();
                                     
-                                    // Update _messages in the background
-                                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                                      if (mounted) {
-                                        _messages.clear();
-                                        _messages.addAll(combinedMessages);
+                                    // Add back any missing user messages (like Betty's)
+                                    List<ChatMessage> missingMessages = [];
+                                    _latestUserMessages.forEach((senderId, message) {
+                                      if (!currentSenderIds.contains(senderId)) {
+                                        debugPrint("Re-adding message from missing sender: $senderId");
+                                        missingMessages.add(message);
                                       }
                                     });
+                                    
+                                    // Add missing messages without rebuilding if possible
+                                    if (missingMessages.isNotEmpty) {
+                                      combinedMessages.addAll(missingMessages);
+                                      // Re-sort the messages by timestamp
+                                      combinedMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+                                      
+                                      // Update _messages in the background
+                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        if (mounted) {
+                                          _messages.clear();
+                                          _messages.addAll(combinedMessages);
+                                        }
+                                      });
+                                    }
                                   }
-                                }
-                                
-                                // Detect when messages disappear for specific accounts
-                                if (snapshot.hasData && snapshot.data!.isEmpty && _messages.isNotEmpty) {
-                                  debugPrint("WARNING: Stream returned empty messages when we had local messages");
-                                }
-                                
-                                // Always use the combined messages for display
-                                final messagesToShow = combinedMessages.isNotEmpty ? combinedMessages : _messages;
-                                
-                                // If we have any messages to show, display them
-                                if (messagesToShow.isNotEmpty) {
-                                  return RefreshIndicator(
-                                    onRefresh: _forceRefreshMessages,
-                                    color: AppColors.primaryBlue,
-                                    child: ListView.builder(
-                                      key: ValueKey<int>(messagesToShow.length), // Key based on length to preserve scroll
-                                      padding: const EdgeInsets.all(8.0),
-                                      reverse: true,
-                                      itemCount: messagesToShow.length,
-                                      itemBuilder: (context, index) {
-                                        final message = messagesToShow[index];
-                                        final isCurrentUser =
-                                            message.senderId == _currentUserId;
+                                  
+                                  // Detect when messages disappear for specific accounts
+                                  if (snapshot.hasData && snapshot.data!.isEmpty && _messages.isNotEmpty) {
+                                    debugPrint("WARNING: Stream returned empty messages when we had local messages");
+                                  }
+                                  
+                                  // Always use the combined messages for display
+                                  final messagesToShow = combinedMessages.isNotEmpty ? combinedMessages : _messages;
+                                  
+                                  // If we have any messages to show, display them
+                                  if (messagesToShow.isNotEmpty) {
+                                    return RefreshIndicator(
+                                      onRefresh: _forceRefreshMessages,
+                                      color: AppColors.primaryBlue,
+                                      child: ListView.builder(
+                                        key: ValueKey<int>(messagesToShow.length), // Key based on length to preserve scroll
+                                        padding: const EdgeInsets.all(8.0),
+                                        reverse: true,
+                                        itemCount: messagesToShow.length,
+                                        itemBuilder: (context, index) {
+                                          final message = messagesToShow[index];
+                                          final isCurrentUser =
+                                              message.senderId == _currentUserId;
 
-                                        return MessageBubble(
-                                          key: ValueKey<String>(message.id), // Key helps avoid rebuilds for unchanged messages
-                                          message: Message.fromChatMessage(message, _currentUserId),
-                                          isCurrentUser: isCurrentUser,
-                                        );
-                                      },
-                                    ),
-                                  );
-                                } else {
-                                  // Show empty state if we have no messages at all
-                                  return Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.message,
-                                          size: 48,
-                                          color: Colors.grey.withOpacity(0.5),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        const Text(
-                                          "No messages yet. Be the first to send one!",
-                                          style: TextStyle(
-                                            color: Colors.grey,
+                                          return MessageBubble(
+                                            key: ValueKey<String>(message.id), // Key helps avoid rebuilds for unchanged messages
+                                            message: Message.fromChatMessage(message, _currentUserId),
+                                            isCurrentUser: isCurrentUser,
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  } else {
+                                    // Show empty state if we have no messages at all
+                                    return Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.message,
+                                            size: 48,
+                                            color: Colors.grey.withOpacity(0.5),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                ),
-
-                // Error message
-                if (_errorMessage != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    color: Colors.red.withOpacity(0.1),
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
+                                          const SizedBox(height: 16),
+                                          const Text(
+                                            "No messages yet. Be the first to send one!",
+                                            style: TextStyle(
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
                   ),
 
-                // Mood selector
-                if (_selectedMood != null)
+                  // Error message
+                  if (_errorMessage != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      color: Colors.red.withOpacity(0.1),
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+
+                  // Mood selector
+                  if (_selectedMood != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      color: isDarkMode ? Colors.black12 : Colors.grey.shade200,
+                      child: Row(
+                        children: [
+                          Icon(
+                            getMoodIcon(_selectedMood!),
+                            color: getMoodColor(_selectedMood!),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Mood: ${getMoodName(_selectedMood!)}',
+                            style: TextStyle(
+                              color: getMoodColor(_selectedMood!),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 16),
+                            onPressed: () {
+                              setState(() {
+                                _selectedMood = null;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Message input
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    color: isDarkMode ? Colors.black12 : Colors.grey.shade200,
+                    padding: const EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          offset: const Offset(0, -2),
+                          blurRadius: 4,
+                          color: Colors.black.withOpacity(0.1),
+                        ),
+                      ],
+                    ),
                     child: Row(
                       children: [
-                        Icon(
-                          getMoodIcon(_selectedMood!),
-                          color: getMoodColor(_selectedMood!),
+                        // Mood selector button
+                        IconButton(
+                          icon: Icon(
+                            _selectedMood != null
+                                ? getMoodIcon(_selectedMood!)
+                                : Icons.mood,
+                            color: _selectedMood != null
+                                ? getMoodColor(_selectedMood!)
+                                : Colors.grey,
+                          ),
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => MoodSelector(
+                                onMoodSelected: _onMoodSelected,
+                                selectedMood: _selectedMood,
+                              ),
+                            );
+                          },
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Mood: ${getMoodName(_selectedMood!)}',
-                          style: TextStyle(
-                            color: getMoodColor(_selectedMood!),
-                            fontWeight: FontWeight.bold,
+
+                        // Text input
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDarkMode ? const Color(0xFF252836) : Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: isDarkMode ? Colors.white10 : Colors.grey.shade300,
+                                width: 1,
+                              ),
+                            ),
+                            child: TextField(
+                              controller: _textController,
+                              focusNode: _focusNode,
+                              textCapitalization: TextCapitalization.sentences,
+                              decoration: InputDecoration(
+                                hintText: 'Type a message...',
+                                hintStyle: TextStyle(
+                                  color:
+                                      isDarkMode ? Colors.grey : Colors.grey.shade600,
+                                ),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                              ),
+                              style: TextStyle(
+                                color: isDarkMode ? Colors.white : Colors.black87,
+                              ),
+                              maxLines: null,
+                              onSubmitted: (_) => _sendMessage(),
+                            ),
                           ),
                         ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 16),
-                          onPressed: () {
-                            setState(() {
-                              _selectedMood = null;
-                            });
-                          },
+                        const SizedBox(width: 8),
+
+                        // Send button
+                        Material(
+                          color: AppColors.primaryBlue,
+                          borderRadius: BorderRadius.circular(24),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(24),
+                            onTap: _sendingMessage ? null : _sendMessage,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              alignment: Alignment.center,
+                              child: _sendingMessage
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.send,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-
-                // Message input
-                Container(
-                  padding: const EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        offset: const Offset(0, -2),
-                        blurRadius: 4,
-                        color: Colors.black.withOpacity(0.1),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // Mood selector button
-                      IconButton(
-                        icon: Icon(
-                          _selectedMood != null
-                              ? getMoodIcon(_selectedMood!)
-                              : Icons.mood,
-                          color: _selectedMood != null
-                              ? getMoodColor(_selectedMood!)
-                              : Colors.grey,
-                        ),
-                        onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => MoodSelector(
-                              onMoodSelected: _onMoodSelected,
-                              selectedMood: _selectedMood,
-                            ),
-                          );
-                        },
-                      ),
-
-                      // Text input
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isDarkMode ? const Color(0xFF252836) : Colors.white,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: isDarkMode ? Colors.white10 : Colors.grey.shade300,
-                              width: 1,
-                            ),
-                          ),
-                          child: TextField(
-                            controller: _textController,
-                            focusNode: _focusNode,
-                            textCapitalization: TextCapitalization.sentences,
-                            decoration: InputDecoration(
-                              hintText: 'Type a message...',
-                              hintStyle: TextStyle(
-                                color:
-                                    isDarkMode ? Colors.grey : Colors.grey.shade600,
-                              ),
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 8,
-                              ),
-                            ),
-                            style: TextStyle(
-                              color: isDarkMode ? Colors.white : Colors.black87,
-                            ),
-                            maxLines: null,
-                            onSubmitted: (_) => _sendMessage(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Send button
-                      Material(
-                        color: AppColors.primaryBlue,
-                        borderRadius: BorderRadius.circular(24),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(24),
-                          onTap: _sendingMessage ? null : _sendMessage,
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            alignment: Alignment.center,
-                            child: _sendingMessage
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor:
-                                          AlwaysStoppedAnimation<Color>(Colors.white),
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.send,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

@@ -15,6 +15,8 @@ class ChatRoom {
   final DateTime? closedAt;
   final DateTime? expiresAt;
   final String? closedBy;
+  final bool isDirectMessage;
+  final List<String>? participantIds;
 
   // Token costs
   static const int messageTokenCost = 1;
@@ -35,6 +37,8 @@ class ChatRoom {
     this.closedAt,
     this.expiresAt,
     this.closedBy,
+    this.isDirectMessage = false,
+    this.participantIds,
   }) : createdAt = createdAt ?? DateTime.now();
 
   // Create from Firestore document
@@ -60,6 +64,8 @@ class ChatRoom {
       closedAt: (data['closedAt'] as Timestamp?)?.toDate(),
       expiresAt: (data['expiresAt'] as Timestamp?)?.toDate(),
       closedBy: data['closedBy'],
+      isDirectMessage: data['isDirectMessage'] ?? false,
+      participantIds: data['participantIds'] != null ? List<String>.from(data['participantIds']) : null,
     );
   }
 
@@ -82,6 +88,8 @@ class ChatRoom {
       'closedAt': closedAt != null ? Timestamp.fromDate(closedAt!) : null,
       'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt!) : null,
       'closedBy': closedBy,
+      'isDirectMessage': isDirectMessage,
+      'participantIds': participantIds,
     };
   }
 
@@ -101,6 +109,8 @@ class ChatRoom {
     DateTime? closedAt,
     DateTime? expiresAt,
     String? closedBy,
+    bool? isDirectMessage,
+    List<String>? participantIds,
   }) {
     return ChatRoom(
       id: id ?? this.id,
@@ -117,6 +127,8 @@ class ChatRoom {
       closedAt: closedAt ?? this.closedAt,
       expiresAt: expiresAt ?? this.expiresAt,
       closedBy: closedBy ?? this.closedBy,
+      isDirectMessage: isDirectMessage ?? this.isDirectMessage,
+      participantIds: participantIds ?? this.participantIds,
     );
   }
 }

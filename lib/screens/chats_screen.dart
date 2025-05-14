@@ -129,8 +129,11 @@ class _ChatsScreenState extends State<ChatsScreen>
       if (userId != null) {
         final userChatRooms = await chatService.getUserChatRoomsStream(userId).first;
         
+        // Filter out direct messages - they should only appear in Contacts > Active Chats
+        final nonDirectMessageRooms = userChatRooms.where((room) => !room.isDirectMessage);
+        
         // Convert regular ChatRoom objects to AreaChatRoom for UI display
-        final publicRegularRooms = userChatRooms
+        final publicRegularRooms = nonDirectMessageRooms
             .where((room) => room.isPublic)
             .map((room) => AreaChatRoom(
                   id: room.id,
@@ -146,10 +149,12 @@ class _ChatsScreenState extends State<ChatsScreen>
                   lastMessage: room.lastMessage,
                   lastActivity: room.lastActivity,
                   isOfficial: false,
+                  isDirectMessage: room.isDirectMessage,
+                  participantIds: room.participantIds,
                 ))
             .toList();
         
-        final privateRegularRooms = userChatRooms
+        final privateRegularRooms = nonDirectMessageRooms
             .where((room) => !room.isPublic)
             .map((room) => AreaChatRoom(
                   id: room.id,
@@ -165,13 +170,15 @@ class _ChatsScreenState extends State<ChatsScreen>
                   lastMessage: room.lastMessage,
                   lastActivity: room.lastActivity, 
                   isOfficial: false,
+                  isDirectMessage: room.isDirectMessage,
+                  participantIds: room.participantIds,
                 ))
             .toList();
 
         setState(() {
-          // Combine area rooms with regular rooms, avoiding duplicates
-          _areaChatRooms = [...officialRooms];
-          _privateChatRooms = [...privateRooms];
+          // Filter out any direct messages from area rooms as well (just to be safe)
+          _areaChatRooms = officialRooms.where((room) => !room.isDirectMessage).toList();
+          _privateChatRooms = privateRooms.where((room) => !room.isDirectMessage).toList();
           
           // Add regular rooms while avoiding duplicates
           for (final room in publicRegularRooms) {
@@ -202,8 +209,9 @@ class _ChatsScreenState extends State<ChatsScreen>
         });
       } else {
         setState(() {
-          _areaChatRooms = officialRooms;
-          _privateChatRooms = privateRooms;
+          // Filter out any direct messages from area rooms
+          _areaChatRooms = officialRooms.where((room) => !room.isDirectMessage).toList();
+          _privateChatRooms = privateRooms.where((room) => !room.isDirectMessage).toList();
           _isLoading = false;
           _filterRooms();
         });
@@ -1321,6 +1329,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                             name: roomName,
                             memberIds: [chatService.currentUserId!],
                             isPublic: isPublic,
+                            isDirectMessage: false,
                           );
 
                           if (roomId != null && context.mounted) {

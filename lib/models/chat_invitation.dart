@@ -9,6 +9,7 @@ class ChatInvitation {
   final String inviterId;
   final String inviteeId;
   final bool isPublic;
+  final bool isDirectMessage;
   final DateTime createdAt;
   final InvitationStatus status;
 
@@ -19,6 +20,7 @@ class ChatInvitation {
     required this.inviterId,
     required this.inviteeId,
     required this.isPublic,
+    this.isDirectMessage = false,
     required this.createdAt,
     required this.status,
   });
@@ -38,6 +40,7 @@ class ChatInvitation {
       inviterId: data['inviterId'] ?? '',
       inviteeId: data['inviteeId'] ?? '',
       isPublic: data['isPublic'] ?? true,
+      isDirectMessage: data['isDirectMessage'] ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       status: _parseStatus(data['status']),
     );
@@ -76,6 +79,7 @@ class ChatInvitation {
       'inviterId': inviterId,
       'inviteeId': inviteeId,
       'isPublic': isPublic,
+      'isDirectMessage': isDirectMessage,
       'createdAt': Timestamp.fromDate(createdAt),
       'status': statusToString(status),
     };
@@ -89,6 +93,7 @@ class ChatInvitation {
     String? inviterId,
     String? inviteeId,
     bool? isPublic,
+    bool? isDirectMessage,
     DateTime? createdAt,
     InvitationStatus? status,
   }) {
@@ -99,6 +104,7 @@ class ChatInvitation {
       inviterId: inviterId ?? this.inviterId,
       inviteeId: inviteeId ?? this.inviteeId,
       isPublic: isPublic ?? this.isPublic,
+      isDirectMessage: isDirectMessage ?? this.isDirectMessage,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
     );

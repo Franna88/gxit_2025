@@ -73,20 +73,55 @@ class PopupChatService {
 
   // Get all scheduled popup chat rooms
   Stream<List<PopupChatRoom>> getScheduledPopupChatRoomsStream() {
-    final now = DateTime.now();
-    return _popupRoomsCollection
-        .where('scheduledTime', isGreaterThan: Timestamp.fromDate(now))
-        .where(
-          'status',
-          isEqualTo: PopupChatRoom.statusToString(PopupChatStatus.scheduled),
-        )
-        .orderBy('scheduledTime')
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => PopupChatRoom.fromFirestore(doc))
-              .toList();
-        });
+    try {
+      final now = DateTime.now();
+      
+      // First try to ensure the system bot exists
+      _userService.ensureSystemBotExists();
+      
+      // Create a safeguarded stream with error handling
+      return _popupRoomsCollection
+          .where('scheduledTime', isGreaterThan: Timestamp.fromDate(now))
+          .where(
+            'status',
+            isEqualTo: PopupChatRoom.statusToString(PopupChatStatus.scheduled),
+          )
+          .orderBy('scheduledTime')
+          .snapshots()
+          .handleError((error) {
+            print('Error fetching scheduled popup chats: $error');
+            // Return an empty list instead of propagating the error
+            return [];
+          })
+          .map((snapshot) {
+            // Check if we have daily topics to create if none exist
+            if (snapshot.docs.isEmpty) {
+              // Create a daily room if none exists, but don't wait for it
+              checkAndCreateDailyRoom().then((created) {
+                if (created) {
+                  print('Created new daily discussion topic');
+                }
+              });
+            }
+            
+            return snapshot.docs
+                .map((doc) {
+                  try {
+                    return PopupChatRoom.fromFirestore(doc);
+                  } catch (e) {
+                    print('Error parsing popup chat room: $e');
+                    return null;
+                  }
+                })
+                .where((room) => room != null)
+                .cast<PopupChatRoom>()
+                .toList();
+          });
+    } catch (e) {
+      print('Error setting up scheduled popup chats stream: $e');
+      // Return an empty stream if there's a setup error
+      return Stream.value([]);
+    }
   }
 
   // Get all active waiting rooms
@@ -215,32 +250,49 @@ class PopupChatService {
 
   // Check if we need to create a new daily chat room
   Future<bool> checkAndCreateDailyRoom() async {
-    final now = DateTime.now();
-    final todayMidnight = DateTime(now.year, now.month, now.day);
-    final tomorrowMidnight = todayMidnight.add(const Duration(days: 1));
+    try {
+      // Ensure the system bot exists first
+      await _userService.ensureSystemBotExists();
+      
+      final now = DateTime.now();
+      final todayMidnight = DateTime(now.year, now.month, now.day);
+      final tomorrowMidnight = todayMidnight.add(const Duration(days: 1));
 
-    // Check if we have any system-created rooms scheduled for tomorrow already
-    final existingRooms =
-        await _popupRoomsCollection
-            .where('creatorId', isEqualTo: systemBotId)
-            .where(
-              'scheduledTime',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(todayMidnight),
-            )
-            .where(
-              'scheduledTime',
-              isLessThan: Timestamp.fromDate(tomorrowMidnight),
-            )
-            .limit(1)
-            .get();
+      // Check if we have any system-created rooms scheduled for tomorrow already
+      try {
+        final existingRooms =
+            await _popupRoomsCollection
+                .where('creatorId', isEqualTo: systemBotId)
+                .where(
+                  'scheduledTime',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(todayMidnight),
+                )
+                .where(
+                  'scheduledTime',
+                  isLessThan: Timestamp.fromDate(tomorrowMidnight),
+                )
+                .limit(1)
+                .get();
 
-    // If no rooms exist for tomorrow, create one
-    if (existingRooms.docs.isEmpty) {
-      final roomId = await createDailyRandomChatRoom();
-      return roomId != null;
+        // If no rooms exist for tomorrow, create one
+        if (existingRooms.docs.isEmpty) {
+          print("No daily discussion topics found - creating a new one");
+          final roomId = await createDailyRandomChatRoom();
+          return roomId != null;
+        }
+        
+        print("Found existing daily discussion topic");
+        return false;
+      } catch (e) {
+        // If there's an error with the query, it might be because the collection doesn't exist yet
+        print("Error checking for existing rooms: $e - creating a new one");
+        final roomId = await createDailyRandomChatRoom();
+        return roomId != null;
+      }
+    } catch (e) {
+      print('Error checking/creating daily room: $e');
+      return false;
     }
-
-    return false;
   }
 
   // Join waiting room for a popup chat
@@ -651,6 +703,24 @@ class PopupChatService {
       await batch.commit();
     } catch (e) {
       print('Error notifying about chat ending: $e');
+    }
+  }
+
+  // Initialize the popup chat service
+  Future<void> initialize() async {
+    try {
+      // Ensure system bot exists
+      await _userService.ensureSystemBotExists();
+      
+      // Check if we need to create a daily room
+      await checkAndCreateDailyRoom();
+      
+      // Check for expired/pending popup chat rooms
+      checkAllPopupChatRooms();
+      
+      print('Popup chat service initialized successfully');
+    } catch (e) {
+      print('Error initializing popup chat service: $e');
     }
   }
 }
