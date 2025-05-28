@@ -147,20 +147,28 @@ class _ContactsScreenState extends State<ContactsScreen>
 
   // Load chat invitations from ChatService
   void _loadChatInvitations() {
-    _chatService.getChatInvitations().listen((invitations) {
-      final inviteContacts = invitations.map((invite) => 
-        ContactModel(
+    _chatService.getChatInvitations().listen((invitations) async {
+      final List<ContactModel> inviteContacts = [];
+      
+      for (var invite in invitations) {
+        // Get inviter's information
+        final inviter = await _userService.getUser(invite.inviterId);
+        final inviterName = inviter?.name ?? 'Unknown User';
+        
+        inviteContacts.add(ContactModel(
           id: invite.id,
-          name: invite.roomName,
-          address: "Chat invitation from ${invite.inviterId}",
+          name: "Chat with $inviterName",
+          address: "Invitation to join \"${invite.roomName}\"",
           status: ContactStatus.online,
           messageType: "Invitation",
-        )
-      ).toList();
+        ));
+      }
       
-      setState(() {
-        _contactGroups['Chat Invites'] = inviteContacts;
-      });
+      if (mounted) {
+        setState(() {
+          _contactGroups['Chat Invites'] = inviteContacts;
+        });
+      }
     });
   }
 
@@ -171,13 +179,8 @@ class _ContactsScreenState extends State<ContactsScreen>
     
     _chatService.getDirectMessageChatsStream(userId).listen((chats) {
       final directMessageContacts = chats.map((chat) {
-        // For direct messages, we want to show the other user's name
-        String displayName = chat.name;
-        
-        // Fix for "new people" or empty room names
-        if (displayName.toLowerCase() == "new people" || displayName.trim().isEmpty) {
-          displayName = "Chat Contact"; // Default fallback, this will be replaced once we get user info
-        }
+        // For direct messages, we want to show the other user's name, NOT the room name
+        String displayName = "Chat Contact"; // Default fallback
         
         // If we have participant IDs, try to get other user's name
         if (chat.participantIds != null && chat.participantIds!.length == 2) {
@@ -199,7 +202,7 @@ class _ContactsScreenState extends State<ContactsScreen>
                   if (index >= 0) {
                     _contactGroups['Active Chats']![index] = ContactModel(
                       id: chat.id,
-                      name: otherUser.name,
+                      name: otherUser.name, // Always use the other user's name
                       address: chat.lastMessage ?? "Start chatting now",
                       status: _userService.isUserOnline(otherUserId) 
                           ? ContactStatus.online 
@@ -211,6 +214,52 @@ class _ContactsScreenState extends State<ContactsScreen>
                 });
               }
             });
+          }
+        } else if (chat.memberIds.length == 2) {
+          // Fallback to memberIds if participantIds is not available
+          final otherUserId = chat.memberIds.firstWhere(
+            (id) => id != userId,
+            orElse: () => '', // Fallback if somehow we don't find another user
+          );
+          
+          if (otherUserId.isNotEmpty) {
+            _userService.getUser(otherUserId).then((otherUser) {
+              if (otherUser != null && mounted) {
+                // Update contact with real name if we have it
+                setState(() {
+                  final index = _contactGroups['Active Chats']?.indexWhere(
+                    (contact) => contact.id == chat.id
+                  ) ?? -1;
+                  
+                  if (index >= 0) {
+                    _contactGroups['Active Chats']![index] = ContactModel(
+                      id: chat.id,
+                      name: otherUser.name, // Always use the other user's name
+                      address: chat.lastMessage ?? "Start chatting now",
+                      status: _userService.isUserOnline(otherUserId) 
+                          ? ContactStatus.online 
+                          : ContactStatus.offline,
+                      messageType: "Direct Message",
+                      chatRoomId: chat.id,
+                    );
+                  }
+                });
+              }
+            });
+          }
+        } else {
+          // Fallback: if we don't have participant IDs, try to extract from room name
+          // Remove "Chat with " prefix if it exists and it's not the current user's name
+          if (chat.name.startsWith('Chat with ')) {
+            final nameFromRoom = chat.name.substring('Chat with '.length);
+            // Only use this if it's not empty and we can't get participant info
+            if (nameFromRoom.isNotEmpty) {
+              displayName = nameFromRoom;
+            }
+          } else if (chat.name.isNotEmpty && 
+                     chat.name.toLowerCase() != "new people" && 
+                     chat.name.trim().isNotEmpty) {
+            displayName = chat.name;
           }
         }
         
@@ -544,8 +593,8 @@ class _ContactsScreenState extends State<ContactsScreen>
           chatRoomId = await chatService.createChatRoom(
             name: roomName,
             memberIds: [currentUser.id],
-            isPublic: false, // Direct messages are private
-            isDirectMessage: true, // Explicitly mark as a direct message
+            isPublic: false, // Direct messages are always private (not public)
+            isDirectMessage: true, // This marks it as a direct message (1-on-1 chat)
           );
           
           if (chatRoomId != null) {
@@ -556,31 +605,40 @@ class _ContactsScreenState extends State<ContactsScreen>
             );
             
             // Show success message and navigate to the chat
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Invitation sent to ${selectedUser.name}'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+              
+              // Navigate to the new chat room
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatScreen(
+                    contactName: selectedUser!.name,
+                    chatRoomId: chatRoomId!,
+                  ),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          if (mounted) {
+            String errorMessage = e.toString();
+            if (errorMessage.contains('invitation is already pending')) {
+              errorMessage = 'An invitation has already been sent to this user';
+            }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Invitation sent to ${selectedUser.name}'),
-                backgroundColor: Colors.green,
-              ),
-            );
-            
-            // Navigate to the new chat room
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChatScreen(
-                  contactName: selectedUser!.name,
-                  chatRoomId: chatRoomId!,
-                ),
+                content: Text(errorMessage.split('Exception: ').last),
+                backgroundColor: Colors.red,
               ),
             );
           }
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error sending invitation: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          return;
         }
         return;
       }
@@ -615,8 +673,8 @@ class _ContactsScreenState extends State<ContactsScreen>
         chatRoomId = await chatService.createChatRoom(
           name: roomName,
           memberIds: [currentUser.id],
-          isPublic: false, // Direct messages are private
-          isDirectMessage: true, // Explicitly mark as a direct message
+          isPublic: false, // Direct messages are always private (not public)
+          isDirectMessage: true, // This marks it as a direct message (1-on-1 chat)
         );
         
         if (chatRoomId != null) {

@@ -30,6 +30,8 @@ class _ChatsScreenState extends State<ChatsScreen>
   List<AreaChatRoom> _areaChatRooms = [];
   List<AreaChatRoom> _privateChatRooms = [];
   bool _isLoading = true;
+  bool _hasError = false;  // Add error state tracking
+  String? _errorMessage;  // Add error message tracking
   
   // Search functionality
   final TextEditingController _searchController = TextEditingController();
@@ -48,8 +50,8 @@ class _ChatsScreenState extends State<ChatsScreen>
   void initState() {
     super.initState();
 
-    // Load chat rooms
-    _loadChatRooms();
+    // Load chat rooms with retry logic
+    _loadChatRoomsWithRetry();
 
     // Pulse animation for neon elements
     _pulseController = AnimationController(
@@ -71,6 +73,48 @@ class _ChatsScreenState extends State<ChatsScreen>
     
     // Set up search text listener
     _searchController.addListener(_performSearch);
+  }
+
+  // Add retry logic for loading chat rooms
+  Future<void> _loadChatRoomsWithRetry() async {
+    int retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = Duration(seconds: 2);
+
+    while (retryCount < maxRetries) {
+      try {
+        await _loadChatRooms();
+        return; // Success, exit the retry loop
+      } catch (e) {
+        retryCount++;
+        if (retryCount < maxRetries) {
+          debugPrint('Retry $retryCount after error: $e');
+          await Future.delayed(retryDelay);
+        }
+      }
+    }
+
+    // If we get here, all retries failed
+    setState(() {
+      _isLoading = false;
+      _hasError = true;
+      _errorMessage = 'Unable to load chats after several attempts. Please check your connection.';
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage!),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: () {
+              _loadChatRoomsWithRetry();
+            },
+          ),
+        ),
+      );
+    });
   }
 
   void _performSearch() {
@@ -115,112 +159,147 @@ class _ChatsScreenState extends State<ChatsScreen>
   }
 
   Future<void> _loadChatRooms() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
+      _hasError = false;
+      _errorMessage = null;
     });
 
     try {
+      // Check if user is authenticated
+      final userId = chatService.currentUserId;
+      debugPrint('Loading chats for user: $userId');
+      
+      if (userId == null || userId.isEmpty) {
+        debugPrint('User not authenticated');
+        throw Exception('User not authenticated');
+      }
+
       // Load area chat rooms
+      debugPrint('Loading official area chat rooms...');
       final officialRooms = await _locationService.getOfficialAreaChatRooms();
+      debugPrint('Loaded ${officialRooms.length} official rooms');
+      if (!mounted) return;
+      
+      debugPrint('Loading private chat rooms...');
       final privateRooms = await _locationService.getPrivateChatRooms();
+      debugPrint('Loaded ${privateRooms.length} private rooms');
+      if (!mounted) return;
       
       // Load regular chat rooms created with createChatRoom
-      final userId = chatService.currentUserId;
-      if (userId != null) {
-        final userChatRooms = await chatService.getUserChatRoomsStream(userId).first;
-        
-        // Filter out direct messages - they should only appear in Contacts > Active Chats
-        final nonDirectMessageRooms = userChatRooms.where((room) => !room.isDirectMessage);
-        
-        // Convert regular ChatRoom objects to AreaChatRoom for UI display
-        final publicRegularRooms = nonDirectMessageRooms
-            .where((room) => room.isPublic)
-            .map((room) => AreaChatRoom(
-                  id: room.id,
-                  name: room.name,
-                  areaName: "User Room",
-                  creatorId: room.creatorId ?? '',
-                  createdAt: room.createdAt,
-                  isPublic: room.isPublic,
-                  memberCount: room.memberCount,
-                  memberIds: room.memberIds,
-                  location: const GeoPoint(0, 0),
-                  radius: 0,
-                  lastMessage: room.lastMessage,
-                  lastActivity: room.lastActivity,
-                  isOfficial: false,
-                  isDirectMessage: room.isDirectMessage,
-                  participantIds: room.participantIds,
-                ))
-            .toList();
-        
-        final privateRegularRooms = nonDirectMessageRooms
-            .where((room) => !room.isPublic)
-            .map((room) => AreaChatRoom(
-                  id: room.id,
-                  name: room.name,
-                  areaName: "Private Room",
-                  creatorId: room.creatorId ?? '',
-                  createdAt: room.createdAt,
-                  isPublic: room.isPublic,
-                  memberCount: room.memberCount,
-                  memberIds: room.memberIds,
-                  location: const GeoPoint(0, 0),
-                  radius: 0,
-                  lastMessage: room.lastMessage,
-                  lastActivity: room.lastActivity, 
-                  isOfficial: false,
-                  isDirectMessage: room.isDirectMessage,
-                  participantIds: room.participantIds,
-                ))
-            .toList();
+      debugPrint('Loading user chat rooms...');
+      final userChatRooms = await chatService.getUserChatRoomsStream(userId).first;
+      debugPrint('Loaded ${userChatRooms.length} user rooms');
+      if (!mounted) return;
+      
+      // Filter out direct messages - they should only appear in Contacts > Active Chats
+      final nonDirectMessageRooms = userChatRooms.where((room) => !room.isDirectMessage);
+      debugPrint('Found ${nonDirectMessageRooms.length} non-direct message rooms');
+      
+      // Convert regular ChatRoom objects to AreaChatRoom for UI display
+      final publicRegularRooms = nonDirectMessageRooms
+          .where((room) => room.isPublic)
+          .map((room) => AreaChatRoom(
+                id: room.id,
+                name: room.name,
+                areaName: "User Room",
+                creatorId: room.creatorId ?? '',
+                createdAt: room.createdAt,
+                isPublic: room.isPublic,
+                memberCount: room.memberCount,
+                memberIds: room.memberIds,
+                location: const GeoPoint(0, 0),
+                radius: 0,
+                lastMessage: room.lastMessage,
+                lastActivity: room.lastActivity,
+                isOfficial: false,
+                isDirectMessage: room.isDirectMessage,
+                participantIds: room.participantIds,
+              ))
+          .toList();
+      
+      final privateRegularRooms = nonDirectMessageRooms
+          .where((room) => !room.isPublic)
+          .map((room) => AreaChatRoom(
+                id: room.id,
+                name: room.name,
+                areaName: "Private Room",
+                creatorId: room.creatorId ?? '',
+                createdAt: room.createdAt,
+                isPublic: room.isPublic,
+                memberCount: room.memberCount,
+                memberIds: room.memberIds,
+                location: const GeoPoint(0, 0),
+                radius: 0,
+                lastMessage: room.lastMessage,
+                lastActivity: room.lastActivity, 
+                isOfficial: false,
+                isDirectMessage: room.isDirectMessage,
+                participantIds: room.participantIds,
+              ))
+          .toList();
 
-        setState(() {
-          // Filter out any direct messages from area rooms as well (just to be safe)
-          _areaChatRooms = officialRooms.where((room) => !room.isDirectMessage).toList();
-          _privateChatRooms = privateRooms.where((room) => !room.isDirectMessage).toList();
-          
-          // Add regular rooms while avoiding duplicates
-          for (final room in publicRegularRooms) {
-            if (!_areaChatRooms.any((r) => r.id == room.id)) {
-              _areaChatRooms.add(room);
-            }
+      setState(() {
+        // Filter out any direct messages from area rooms as well (just to be safe)
+        _areaChatRooms = officialRooms.where((room) => !room.isDirectMessage).toList();
+        _privateChatRooms = privateRooms.where((room) => !room.isDirectMessage).toList();
+        
+        // Add regular rooms while avoiding duplicates
+        for (final room in publicRegularRooms) {
+          if (!_areaChatRooms.any((r) => r.id == room.id)) {
+            _areaChatRooms.add(room);
           }
-          
-          for (final room in privateRegularRooms) {
-            if (!_privateChatRooms.any((r) => r.id == room.id)) {
-              _privateChatRooms.add(room);
-            }
+        }
+        
+        for (final room in privateRegularRooms) {
+          if (!_privateChatRooms.any((r) => r.id == room.id)) {
+            _privateChatRooms.add(room);
           }
-          
-          // Sort rooms by creation date (newest first)
-          _areaChatRooms.sort((a, b) {
-            if (a.createdAt == null || b.createdAt == null) return 0;
-            return b.createdAt!.compareTo(a.createdAt!);
-          });
-          
-          _privateChatRooms.sort((a, b) {
-            if (a.createdAt == null || b.createdAt == null) return 0;
-            return b.createdAt!.compareTo(a.createdAt!);
-          });
-          
-          _isLoading = false;
-          _filterRooms(); // Apply any existing search filter to the newly loaded rooms
+        }
+        
+        // Sort rooms by creation date (newest first)
+        _areaChatRooms.sort((a, b) {
+          if (a.createdAt == null || b.createdAt == null) return 0;
+          return b.createdAt!.compareTo(a.createdAt!);
         });
-      } else {
-        setState(() {
-          // Filter out any direct messages from area rooms
-          _areaChatRooms = officialRooms.where((room) => !room.isDirectMessage).toList();
-          _privateChatRooms = privateRooms.where((room) => !room.isDirectMessage).toList();
-          _isLoading = false;
-          _filterRooms();
+        
+        _privateChatRooms.sort((a, b) {
+          if (a.createdAt == null || b.createdAt == null) return 0;
+          return b.createdAt!.compareTo(a.createdAt!);
         });
-      }
-    } catch (e) {
+        
+        _isLoading = false;
+        _filterRooms(); // Apply any existing search filter to the newly loaded rooms
+      });
+    } catch (e, stackTrace) {
       debugPrint('Error loading chat rooms: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (!mounted) return;
+      
       setState(() {
         _isLoading = false;
+        _hasError = true;
+        _errorMessage = e.toString().contains('not authenticated') 
+          ? 'Please sign in to view chats'
+          : 'Error loading chats: ${e.toString()}. Please check your connection and try again.';
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage!),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: () {
+              _loadChatRoomsWithRetry();
+            },
+          ),
+        ),
+      );
     }
   }
 
@@ -514,10 +593,60 @@ class _ChatsScreenState extends State<ChatsScreen>
 
             // Main content
             SafeArea(
-              child:
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : CustomScrollView(
+              child: _isLoading
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text(
+                          'Loading chats...',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : _hasError
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.red[300],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _errorMessage ?? 'Error loading chats',
+                            style: TextStyle(
+                              color: Colors.red[300],
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: _loadChatRoomsWithRetry,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).primaryColor,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : CustomScrollView(
                         slivers: [
                           // Only show the neon app bar if not searching
                           if (!_isSearching)
@@ -1349,7 +1478,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                             name: roomName,
                             memberIds: [chatService.currentUserId!],
                             isPublic: isPublic,
-                            isDirectMessage: false,
+                            isDirectMessage: false, // This creates a regular chat room (public or private), not a direct message
                           );
 
                           if (roomId != null && context.mounted) {

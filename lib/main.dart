@@ -26,14 +26,16 @@ late final LifecycleService lifecycleService;
 // Add error handling for Flutter errors
 void _handleFlutterError(FlutterErrorDetails details) {
   FlutterError.dumpErrorToConsole(details);
-  // You could add custom error reporting here
+  // Add more descriptive error logging
   print('Flutter error: ${details.exception}');
   print('Stack trace: ${details.stack}');
+  print('Error location: ${details.library}');
+  print('Error context: ${details.context}');
 }
 
 Future<void> main() async {
   // Set up Flutter error handling
-  FlutterError.onError = _handleFlutterError;
+  FlutterError.onError = _handleFlutterError; 
 
   // Catch any errors in the Zone
   runZonedGuarded(
@@ -42,51 +44,37 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
 
       try {
-        // Apply system UI overlay styling
-        if (Platform.isIOS) {
-          // iOS-specific setup
-          SystemChrome.setSystemUIOverlayStyle(
-            const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              statusBarBrightness:
-                  Brightness.dark, // iOS: dark status bar (white content)
-              statusBarIconBrightness:
-                  Brightness.light, // Android: light icons for dark bg
-            ),
-          );
-        } else {
-          // Android/other platforms
-          SystemChrome.setSystemUIOverlayStyle(
-            const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              systemNavigationBarColor: Colors.black,
-              statusBarIconBrightness:
-                  Brightness.light, // dark icons for light bg
-              systemNavigationBarIconBrightness: Brightness.light,
-            ),
-          );
-        }
-
         // Initialize Firebase with error handling
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         );
         print('Firebase initialized successfully');
 
-        // Configure Firestore settings
-        FirebaseFirestore.instance.settings = Settings(
-          persistenceEnabled: true,
-          cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-        );
+        // Configure Firestore settings with retry logic
+        int retryCount = 0;
+        const maxRetries = 3;
+        
+        while (retryCount < maxRetries) {
+          try {
+            FirebaseFirestore.instance.settings = const Settings(
+              persistenceEnabled: true,
+              cacheSizeBytes: -1, // Use -1 for unlimited cache size
+            );
 
-        // Test Firestore connection
-        try {
-          // This is a simple read operation to test if we have permissions
-          await FirebaseFirestore.instance.collection('users').limit(1).get();
-          print('Firestore connection test successful');
-        } catch (e) {
-          print('Firestore connection test failed: $e');
-          // We'll continue anyway and handle errors at the app level
+            // Test Firestore connection
+            await FirebaseFirestore.instance.collection('users').limit(1).get();
+            print('Firestore connection test successful');
+            break; // Success, exit retry loop
+          } catch (e) {
+            retryCount++;
+            print('Firestore connection attempt $retryCount failed: $e');
+            if (retryCount < maxRetries) {
+              await Future.delayed(Duration(seconds: 2));
+              continue;
+            }
+            print('All Firestore connection attempts failed');
+            // Continue app initialization anyway, individual components will handle errors
+          }
         }
 
         // Initialize app startup services with enhanced error handling
@@ -95,7 +83,7 @@ Future<void> main() async {
           print('App startup services initialized');
         } catch (e) {
           print('Error initializing app startup services: $e');
-          // We'll continue anyway to allow the app to at least start
+          // Continue app initialization, services will handle errors
         }
 
         // Setup lifecycle service
@@ -108,8 +96,9 @@ Future<void> main() async {
 
         runApp(const MainApp());
       } catch (e, stackTrace) {
-        print('Error during initialization: $e');
-        print(stackTrace);
+        print('Critical error during initialization: $e');
+        print('Stack trace: $stackTrace');
+        
         // Run a simplified version of the app that displays the error
         runApp(
           MaterialApp(
@@ -136,7 +125,7 @@ Future<void> main() async {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Error: $e',
+                        'Error: ${e.toString()}',
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 14,
@@ -146,19 +135,10 @@ Future<void> main() async {
                       const SizedBox(height: 30),
                       ElevatedButton(
                         onPressed: () {
-                          // Launch the app without Firebase initialization
-                          runApp(
-                            MaterialApp(
-                              title: 'Social Buzz',
-                              debugShowCheckedModeBanner: false,
-                              theme: AppTheme.lightTheme,
-                              darkTheme: AppTheme.darkTheme,
-                              themeMode: ThemeMode.dark,
-                              home: const LoginScreen(),
-                            ),
-                          );
+                          // Attempt to restart the app
+                          main();
                         },
-                        child: const Text('Continue without Firebase'),
+                        child: const Text('Retry'),
                       ),
                     ],
                   ),
@@ -173,8 +153,8 @@ Future<void> main() async {
     },
     (error, stackTrace) {
       print('Uncaught error: $error');
-      print(stackTrace);
-      // You could add error reporting here
+      print('Stack trace: $stackTrace');
+      // Add error reporting here if needed
     },
   );
 }

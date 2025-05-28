@@ -9,6 +9,7 @@ import '../models/user_mood.dart';
 import '../models/chat_invitation.dart';
 import '../models/notification_model.dart';
 import 'user_service.dart';
+import '../models/chat_model.dart';
 
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -265,7 +266,20 @@ class ChatService {
         });
   }
 
-  // Create a new chat room with token validation
+  // Create a new chat room
+  // 
+  // Parameters:
+  // - name: The name of the chat room
+  // - memberIds: List of user IDs who will be members of the room
+  // - isPublic: If true, the room appears in public chat room sections and can be joined by anyone
+  //             If false, the room is private and appears in the Private Chat Rooms section
+  // - isDirectMessage: If true, this is a 1-on-1 direct message that appears only in Active Chats
+  //                    If false, this is a regular chat room (public or private)
+  //
+  // Room Types:
+  // 1. Public Chat Room: isPublic=true, isDirectMessage=false → Appears in Area/Public Rooms
+  // 2. Private Chat Room: isPublic=false, isDirectMessage=false → Appears in Private Chat Rooms
+  // 3. Direct Message: isPublic=false, isDirectMessage=true → Appears only in Active Chats
   Future<String?> createChatRoom({
     required String name,
     required List<String> memberIds,
@@ -308,6 +322,7 @@ class ChatService {
       'creatorId': userId,
       'isPublic': isPublic,
       'isDirectMessage': isDirectMessage,
+      'participantIds': isDirectMessage ? memberIds : null,
       'createdAt': FieldValue.serverTimestamp(),
       'lastActivity': FieldValue.serverTimestamp(),
     });
@@ -671,7 +686,27 @@ class ChatService {
     return docRef.id;
   }
 
-  // Invite users to a chat room
+  // Check if a pending invitation exists
+  Future<bool> hasPendingInvitation(String inviteeId, String roomId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('chatInvitations')
+          .where('inviteeId', isEqualTo: inviteeId)
+          .where('roomId', isEqualTo: roomId)
+          .where('status', isEqualTo: 'pending')
+          .get();
+      
+      return querySnapshot.docs.isNotEmpty;
+    } catch (e) {
+      print('Error checking pending invitation: $e');
+      return false;
+    }
+  }
+
+  // Invite users to chat room
+  // IMPORTANT: This method preserves the original room type (private chat room vs direct message)
+  // and does NOT convert private chat rooms to direct messages based on invitation count.
+  // The isDirectMessage flag should only be true for rooms originally created as direct messages.
   Future<bool> inviteUsersToChatRoom({
     required String roomId,
     required List<String> userIds,
@@ -691,14 +726,25 @@ class ChatService {
         throw Exception('You must be a member of the room to invite others');
       }
 
-      // Check if this is a direct message (only inviting one user)
-      bool isDirectMessage = userIds.length == 1;
+      // Use the room's existing isDirectMessage flag instead of determining it based on invitation count
+      // This preserves the original room type (private chat room vs direct message)
+      bool isDirectMessage = room.isDirectMessage;
 
       // Create invitations for each user
       final batch = _firestore.batch();
+      bool anyInvitationCreated = false;
+
       for (String inviteeId in userIds) {
         // Skip if user is already a member
-        if (room.memberIds.contains(inviteeId)) continue;
+        if (room.memberIds.contains(inviteeId)) {
+          continue;
+        }
+
+        // Check for pending invitation
+        final hasPending = await hasPendingInvitation(inviteeId, roomId);
+        if (hasPending) {
+          throw Exception('An invitation is already pending for this user');
+        }
 
         // Create invitation document
         final inviteRef = _firestore.collection('chatInvitations').doc();
@@ -708,25 +754,29 @@ class ChatService {
           'inviteeId': inviteeId,
           'roomName': room.name,
           'createdAt': FieldValue.serverTimestamp(),
-          'status': 'pending', // pending, accepted, declined
+          'status': 'pending',
           'isPublic': room.isPublic,
           'isDirectMessage': isDirectMessage,
         });
+        anyInvitationCreated = true;
 
-        // If it's a direct message, update the chat room with this info
-        if (isDirectMessage) {
+        // Only update the chat room with direct message info if it was originally created as a direct message
+        // and doesn't already have participantIds set
+        if (isDirectMessage && room.participantIds == null) {
           await getChatRoomRef(roomId).update({
-            'isDirectMessage': true,
             'participantIds': [userId, inviteeId],
           });
         }
       }
 
-      await batch.commit();
+      // Only commit if we have any invitations to create
+      if (anyInvitationCreated) {
+        await batch.commit();
+      }
       return true;
     } catch (e) {
       print('Error inviting users to chat room: $e');
-      return false;
+      rethrow; // Rethrow to handle the specific error message in the UI
     }
   }
 
@@ -839,18 +889,20 @@ class ChatService {
       // Check if this is meant to be a direct message
       bool isDirectMessage = inviteData['isDirectMessage'] ?? false;
       
-      // Update chat room if it's a direct message
+      // Only update chat room if it was originally created as a direct message
+      // Don't convert private chat rooms to direct messages
       if (isDirectMessage) {
         final inviterId = inviteData['inviterId'] ?? '';
         if (inviterId.isNotEmpty) {
           try {
+            // Only update participantIds if not already set, don't change isDirectMessage flag
+            // as it should have been set correctly during room creation
             await getChatRoomRef(roomId).update({
-              'isDirectMessage': true,
               'participantIds': [inviterId, userId],
             });
-            print('Room updated for direct messaging');
+            print('Room updated with participant IDs for direct messaging');
           } catch (e) {
-            print('Error updating room for direct messaging: $e');
+            print('Error updating room participant IDs: $e');
             // Continue execution - the invitation was accepted even if this update failed
           }
         }
@@ -1232,5 +1284,95 @@ class ChatService {
               .map((doc) => ChatRoom.fromFirestore(doc))
               .toList();
         });
+  }
+
+  // Get current user's active chats
+  Stream<List<ChatModel>> getActiveChats() {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) return Stream.value([]);
+
+    return _firestore
+        .collection('chats')
+        .where('participants', arrayContains: userId)
+        .where('isActive', isEqualTo: true)
+        .orderBy('lastMessageTime', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return ChatModel.fromMap(data, doc.id);
+      }).toList();
+    });
+  }
+
+  // Mark chat as read
+  Future<void> markChatAsRead(String chatId) async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    await _firestore.collection('chats').doc(chatId).update({
+      'unreadCount.$userId': 0,
+    });
+  }
+
+  // Get chat room ID for a given name (create if doesn't exist)
+  Future<String> getChatRoomId(String name) async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) throw Exception('User not authenticated');
+
+    // Check if chat room already exists
+    final querySnapshot = await _firestore
+        .collection('chats')
+        .where('name', isEqualTo: name)
+        .limit(1)
+        .get();
+
+    if (querySnapshot.docs.isNotEmpty) {
+      return querySnapshot.docs.first.id;
+    }
+
+    // Create new chat room
+    final docRef = await _firestore.collection('chats').add({
+      'name': name,
+      'participants': [userId],
+      'isActive': true,
+      'lastMessage': '',
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'unreadCount': {userId: 0},
+    });
+
+    return docRef.id;
+  }
+
+  // Utility method to update existing direct message rooms with participantIds
+  Future<void> updateDirectMessageRoomsWithParticipantIds() async {
+    try {
+      final userId = currentUserId;
+      if (userId == null) return;
+
+      // Get all direct message rooms for the current user that don't have participantIds
+      final querySnapshot = await _roomsCollection
+          .where('memberIds', arrayContains: userId)
+          .where('isDirectMessage', isEqualTo: true)
+          .get();
+
+      for (final doc in querySnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        
+        // Check if participantIds is missing or null
+        if (data != null && data['participantIds'] == null) {
+          final memberIds = List<String>.from(data['memberIds'] ?? []);
+          
+          // Update the document with participantIds
+          await doc.reference.update({
+            'participantIds': memberIds,
+          });
+          
+          print('Updated chat room ${doc.id} with participantIds: $memberIds');
+        }
+      }
+    } catch (e) {
+      print('Error updating direct message rooms: $e');
+    }
   }
 }

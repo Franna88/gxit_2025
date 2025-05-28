@@ -112,6 +112,10 @@ class _HorizontalChatRoomCardState extends State<HorizontalChatRoomCard>
             child: Container(
               width: 220,
               margin: const EdgeInsets.only(right: 16),
+              constraints: const BoxConstraints(
+                minHeight: 160,
+                maxHeight: 180,
+              ),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -222,15 +226,18 @@ class _HorizontalChatRoomCardState extends State<HorizontalChatRoomCard>
 
                   // Message preview
                   Expanded(
-                    child: Text(
-                      widget.lastMessage,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade300,
-                        height: 1.3,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 48),
+                      child: Text(
+                        widget.lastMessage,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade300,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
 

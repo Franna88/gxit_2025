@@ -2,18 +2,16 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../constants.dart';
 import '../services/user_service.dart';
+import '../services/chat_service.dart';
 import '../models/user_model.dart';
-import '../widgets/chat_summary_card.dart';
-import '../widgets/important_message_card.dart';
-import '../widgets/activity_card.dart';
-import '../widgets/contact_item.dart';
-import '../widgets/horizontal_chat_room_card.dart';
-import '../widgets/area_chat_room_section.dart';
-import '../widgets/popup_chat_section.dart';
+import '../widgets/area_rooms_section.dart';
+import '../widgets/private_rooms_section.dart';
+import '../widgets/active_chat_section.dart';
 import 'contacts_screen.dart';
 import 'chat_screen.dart';
 import 'chats_screen.dart';
 import 'settings_screen.dart';
+import '../services/location_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,6 +23,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
   final UserService _userService = UserService();
+  final ChatService _chatService = ChatService();
   UserModel? currentUser;
 
   // Particle system
@@ -133,17 +132,52 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _navigateToChat(BuildContext context, String name) {
+  void _navigateToChat(BuildContext context, String name) async {
+    try {
+      final chatId = await _chatService.getChatRoomId(name);
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              contactName: name,
+              chatRoomId: chatId,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening chat: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // New method for navigating to existing chat rooms
+  void _navigateToChatRoom(BuildContext context, String roomId, String roomName) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder:
-            (context) => ChatScreen(
-              contactName: name,
-              chatRoomId: 'demoRoom', // Use demo room for now
-            ),
+        builder: (context) => ChatScreen(
+          contactName: roomName,
+          chatRoomId: roomId,
+        ),
       ),
     );
+  }
+
+  Future<void> _refreshData() async {
+    // Refresh user data and force rebuild of sections
+    await _loadCurrentUser();
+    // Force rebuild by calling setState
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -174,220 +208,168 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
             // Main content
             SafeArea(
-              child: CustomScrollView(
-                slivers: [
-                  // App Bar with neon glow
-                  SliverAppBar(
-                    floating: true,
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    title: AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (context, child) {
-                        return Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [
-                                    AppColors.primaryPurple,
-                                    AppColors.primaryBlue,
-                                  ],
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.primaryBlue.withOpacity(
-                                      0.5 * _pulseAnimation.value,
-                                    ),
-                                    blurRadius: 10 * _pulseAnimation.value,
-                                    spreadRadius: 2 * _pulseAnimation.value,
-                                  ),
-                                ],
-                              ),
-                              child: ClipOval(
-                                child: Image.asset(
-                                  'assets/images/gxit_logo.png',
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                    actions: [
-                      _buildNeonIconButton(Icons.search),
-                      _buildNeonIconButton(Icons.notifications_none),
-                    ],
-                  ),
-
-                  // Welcome section with glow
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                      child: AnimatedBuilder(
+              child: RefreshIndicator(
+                onRefresh: _refreshData,
+                color: AppColors.primaryBlue,
+                backgroundColor: Colors.black.withOpacity(0.8),
+                child: CustomScrollView(
+                  slivers: [
+                    // App Bar with neon glow
+                    SliverAppBar(
+                      floating: true,
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
+                      title: AnimatedBuilder(
                         animation: _pulseController,
                         builder: (context, child) {
-                          return Text(
-                            'WELCOME TO THE GRID, ${currentUser?.name}',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 1.5,
-                              shadows: [
-                                Shadow(
-                                  color: AppColors.primaryBlue.withOpacity(
-                                    0.7 * _pulseAnimation.value,
+                          return Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.primaryPurple,
+                                      AppColors.primaryBlue,
+                                    ],
                                   ),
-                                  blurRadius: 10 * _pulseAnimation.value,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primaryBlue.withOpacity(
+                                        0.5 * _pulseAnimation.value,
+                                      ),
+                                      blurRadius: 10 * _pulseAnimation.value,
+                                      spreadRadius: 2 * _pulseAnimation.value,
+                                    ),
+                                  ],
                                 ),
-                                Shadow(
-                                  color: AppColors.primaryPurple.withOpacity(
-                                    0.5 * _pulseAnimation.value,
+                                child: ClipOval(
+                                  child: Image.asset(
+                                    'assets/images/gxit_logo.png',
+                                    fit: BoxFit.cover,
                                   ),
-                                  blurRadius: 12 * _pulseAnimation.value,
-                                  offset: const Offset(2, 1),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           );
                         },
                       ),
-                    ),
-                  ),
-
-                  // Area Chat Rooms Section - No section header needed as it's included in the widget
-                  SliverToBoxAdapter(
-                    child: AreaChatRoomSection(
-                      onRoomTap: (name) => _navigateToChat(context, name),
-                    ),
-                  ),
-
-                  // Daily Popup Chat Topics Section
-                  const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 16.0),
-                      child: PopupChatSection(),
-                    ),
-                  ),
-
-                  // Recent Chats header
-                  _buildSectionHeader('Recent Chats'),
-
-                  // Recent Contacts List
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 140,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        children: [
-                          ChatSummaryCard(
-                            name: 'Alex',
-                            lastMessage: 'Hey, are you free tonight?',
-                            unreadCount: 3,
-                            status: ContactStatus.online,
-                            onTap: () => _navigateToChat(context, 'Alex'),
-                          ),
-                          ChatSummaryCard(
-                            name: 'Emma',
-                            lastMessage: 'Check out this photo!',
-                            unreadCount: 1,
-                            status: ContactStatus.online,
-                            onTap: () => _navigateToChat(context, 'Emma'),
-                          ),
-                          ChatSummaryCard(
-                            name: 'Michael',
-                            lastMessage: 'Game night tomorrow?',
-                            unreadCount: 2,
-                            status: ContactStatus.away,
-                            onTap: () => _navigateToChat(context, 'Michael'),
-                          ),
-                          ChatSummaryCard(
-                            name: 'Jessica',
-                            lastMessage: 'Thanks for the birthday wishes!',
-                            unreadCount: 0,
-                            status: ContactStatus.offline,
-                            onTap: () => _navigateToChat(context, 'Jessica'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Important Messages header
-                  _buildSectionHeader('Important Messages'),
-
-                  // Important Messages List
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        children: [
-                          _buildImportantMessageWithNeon(
-                            context,
-                            'SocialBuzz',
-                            'Party at Emma\'s place this Friday! RSVP by tomorrow evening.',
-                            DateTime.now().subtract(const Duration(hours: 2)),
-                            () => _navigateToChat(context, 'SocialBuzz'),
-                          ),
-                          _buildImportantMessageWithNeon(
-                            context,
-                            'TravelGroup',
-                            'REMINDER: Group trip planning meeting tomorrow at 7pm via video call. Please bring destination ideas!',
-                            DateTime.now().subtract(const Duration(hours: 5)),
-                            () => _navigateToChat(context, 'TravelGroup'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Recent Activity header
-                  _buildSectionHeader('Recent Activity'),
-
-                  // Recent Activity List
-                  SliverList(
-                    delegate: SliverChildListDelegate([
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Column(
-                          children: [
-                            ActivityCard(
-                              activityType: ActivityType.newMember,
-                              message:
-                                  'Carlos and 3 others joined Photography Lovers',
-                              timestamp: DateTime.now().subtract(
-                                const Duration(hours: 1),
+                      actions: [
+                        _buildNeonIconButton(Icons.search),
+                        _buildNeonIconButton(Icons.notifications_none),
+                        // Debug button for private rooms
+                        AnimatedBuilder(
+                          animation: _pulseController,
+                          builder: (context, child) {
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primaryGreen.withOpacity(
+                                      0.3 * _pulseAnimation.value,
+                                    ),
+                                    blurRadius: 8 * _pulseAnimation.value,
+                                    spreadRadius: 1 * _pulseAnimation.value,
+                                  ),
+                                ],
                               ),
-                            ),
-                            ActivityCard(
-                              activityType: ActivityType.fileShared,
-                              message:
-                                  'Emma shared vacation photos in Travel Adventures',
-                              timestamp: DateTime.now().subtract(
-                                const Duration(hours: 3),
+                              child: IconButton(
+                                icon: const Icon(Icons.bug_report, color: Colors.green),
+                                onPressed: () async {
+                                  debugPrint('=== MANUAL DEBUG TRIGGER ===');
+                                  final locationService = LocationService();
+                                  final rooms = await locationService.getPrivateChatRooms();
+                                  debugPrint('Manual debug: Found ${rooms.length} private rooms');
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Debug: Found ${rooms.length} private rooms. Check console for details.'),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  }
+                                },
                               ),
-                            ),
-                            ActivityCard(
-                              activityType: ActivityType.groupCreated,
-                              message:
-                                  'Michael created a new group "Movie Night"',
-                              timestamp: DateTime.now().subtract(
-                                const Duration(hours: 5),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+
+                    // Welcome section with glow
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        child: AnimatedBuilder(
+                          animation: _pulseController,
+                          builder: (context, child) {
+                            return Text(
+                              'WELCOME TO THE GRID, ${currentUser?.name}',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 1.5,
+                                shadows: [
+                                  Shadow(
+                                    color: AppColors.primaryBlue.withOpacity(
+                                      0.7 * _pulseAnimation.value,
+                                    ),
+                                    blurRadius: 10 * _pulseAnimation.value,
+                                  ),
+                                  Shadow(
+                                    color: AppColors.primaryPurple.withOpacity(
+                                      0.5 * _pulseAnimation.value,
+                                    ),
+                                    blurRadius: 12 * _pulseAnimation.value,
+                                    offset: const Offset(2, 1),
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
+                            );
+                          },
                         ),
                       ),
-                    ]),
-                  ),
-                ],
+                    ),
+
+                    // Area Rooms Section
+                    _buildSectionHeader('Area Rooms'),
+                    SliverToBoxAdapter(
+                      child: AreaRoomsSection(
+                        onRoomTap: (roomId, roomName) => _navigateToChatRoom(context, roomId, roomName),
+                      ),
+                    ),
+
+                    // Private Rooms Section
+                    _buildSectionHeader('Private Rooms'),
+                    SliverToBoxAdapter(
+                      child: PrivateRoomsSection(
+                        onRoomTap: (roomId, roomName) => _navigateToChatRoom(context, roomId, roomName),
+                      ),
+                    ),
+
+                    // Active Chat Rooms Section
+                    _buildActiveChatSectionHeader(),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: ActiveChatSection(
+                          onChatTap: (name) => _navigateToChat(context, name),
+                          onChatRoomTap: (roomId, roomName) => _navigateToChatRoom(context, roomId, roomName),
+                        ),
+                      ),
+                    ),
+
+                    // Add some bottom padding
+                    const SliverToBoxAdapter(
+                      child: SizedBox(height: 24),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -530,116 +512,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Helper method to build important message cards with neon effect
-  Widget _buildImportantMessageWithNeon(
-    BuildContext context,
-    String sender,
-    String message,
-    DateTime timestamp,
-    VoidCallback onTap,
-  ) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    return AnimatedBuilder(
-      animation: _pulseController,
-      builder: (context, child) {
-        return GestureDetector(
-          onTap: onTap,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.primaryBlue.withOpacity(0.15),
-                  const Color(0xFF1A1A2E),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.primaryBlue.withOpacity(0.3),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withOpacity(
-                    0.2 * _pulseAnimation.value,
-                  ),
-                  blurRadius: 8 * _pulseAnimation.value,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.flag,
-                        size: 16,
-                        color: AppColors.primaryOrange,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        sender,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isDarkMode ? Colors.white : AppColors.darkText,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        _getTimeText(timestamp),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color:
-                              isDarkMode
-                                  ? AppColors.subtleText
-                                  : Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Message
-                  const SizedBox(height: 8),
-                  Text(
-                    message,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDarkMode ? Colors.grey.shade300 : Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  String _getTimeText(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
-
-    if (difference.inMinutes < 1) {
-      return 'now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d';
-    } else {
-      return '${(difference.inDays / 7).floor()}w';
-    }
-  }
-
   // Bottom navigation bar with neon effect
   Widget _buildNeonBottomNavBar() {
     return AnimatedBuilder(
@@ -709,6 +581,151 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         );
       },
+    );
+  }
+
+  // Specialized section header for Active Chat Rooms with refresh button
+  Widget _buildActiveChatSectionHeader() {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                return Text(
+                  'DIRECT MESSAGES',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        color: AppColors.primaryBlue.withOpacity(
+                          0.5 * _pulseAnimation.value,
+                        ),
+                        blurRadius: 8 * _pulseAnimation.value,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            Row(
+              children: [
+                // Refresh button
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryGreen.withOpacity(
+                              0.2 * _pulseAnimation.value,
+                            ),
+                            blurRadius: 6 * _pulseAnimation.value,
+                            spreadRadius: 1 * _pulseAnimation.value,
+                          ),
+                        ],
+                      ),
+                      child: TextButton.icon(
+                        onPressed: _refreshData,
+                        icon: Icon(
+                          Icons.refresh,
+                          size: 16,
+                          color: AppColors.primaryGreen,
+                        ),
+                        label: Text(
+                          'REFRESH',
+                          style: TextStyle(
+                            color: AppColors.primaryGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.8,
+                            shadows: [
+                              Shadow(
+                                color: AppColors.primaryGreen.withOpacity(
+                                  0.5 * _pulseAnimation.value,
+                                ),
+                                blurRadius: 4 * _pulseAnimation.value,
+                              ),
+                            ],
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          backgroundColor: Colors.transparent,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                // View All button
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryBlue.withOpacity(
+                              0.2 * _pulseAnimation.value,
+                            ),
+                            blurRadius: 6 * _pulseAnimation.value,
+                            spreadRadius: 1 * _pulseAnimation.value,
+                          ),
+                        ],
+                      ),
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const ChatsScreen()),
+                          );
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          backgroundColor: Colors.transparent,
+                        ),
+                        child: Text(
+                          'VIEW ALL',
+                          style: TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.8,
+                            shadows: [
+                              Shadow(
+                                color: AppColors.primaryBlue.withOpacity(
+                                  0.5 * _pulseAnimation.value,
+                                ),
+                                blurRadius: 4 * _pulseAnimation.value,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

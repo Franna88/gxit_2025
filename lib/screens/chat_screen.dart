@@ -12,6 +12,7 @@ import '../widgets/mood_selector.dart';
 import '../widgets/not_enough_tokens_dialog.dart';
 import '../widgets/chat_invite_dialog.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/user_service.dart';
 
 // Define Message class for backward compatibility with MessageBubble
 class Message {
@@ -36,13 +37,25 @@ class Message {
     this.reactions,
   });
 
-  factory Message.fromChatMessage(ChatMessage chatMessage, String currentUserId) {
+  factory Message.fromChatMessage(ChatMessage chatMessage, String currentUserId, {String? otherParticipantName}) {
     final isCurrentUser = chatMessage.senderId == currentUserId;
+    
+    // For direct messages, use the other participant's name for non-current user messages
+    String displayName;
+    if (isCurrentUser) {
+      displayName = 'You';
+    } else if (otherParticipantName != null && otherParticipantName.isNotEmpty) {
+      // Use the other participant's name for direct messages
+      displayName = otherParticipantName;
+    } else {
+      // Fallback to the stored sender name
+      displayName = chatMessage.senderName;
+    }
     
     return Message(
       id: chatMessage.id,
       senderId: chatMessage.senderId,
-      senderName: isCurrentUser ? 'You' : chatMessage.senderName,
+      senderName: displayName,
       content: chatMessage.content,
       timestamp: chatMessage.timestamp,
       isMe: isCurrentUser,
@@ -94,9 +107,15 @@ class _ChatScreenState extends State<ChatScreen> {
   // Create a local map to store the latest message from each user
   final Map<String, ChatMessage> _latestUserMessages = {};
 
+  // Cache for other participant's name in direct messages
+  String? _otherParticipantName;
+
   @override
   void initState() {
     super.initState();
+    
+    // Load other participant's name for direct messages
+    _loadOtherParticipantName();
     
     // First attempt to load from Firestore
     _loadInitialMessages();
@@ -375,15 +394,14 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      // Use the contact name from widget if any of these conditions are met:
-                      // 1. The chatRoom name is "new people"
-                      // 2. This is a direct message and the widget's contactName is specific
-                      // 3. The chatRoom name is empty or very generic
-                      (chatRoom.name.toLowerCase() == "new people" || 
-                       (chatRoom.isDirectMessage && widget.contactName.isNotEmpty && widget.contactName != "Chat") ||
-                       chatRoom.name.trim().isEmpty) 
-                          ? widget.contactName 
-                          : chatRoom.name,
+                      // For direct messages, prioritize the other participant's name
+                      chatRoom.isDirectMessage && _otherParticipantName != null
+                          ? _otherParticipantName!
+                          : (chatRoom.name.toLowerCase() == "new people" || 
+                             (chatRoom.isDirectMessage && widget.contactName.isNotEmpty && widget.contactName != "Chat") ||
+                             chatRoom.name.trim().isEmpty) 
+                                ? widget.contactName 
+                                : chatRoom.name,
                       overflow: TextOverflow.ellipsis
                     ),
                   ),
@@ -538,7 +556,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
                                           return MessageBubble(
                                             key: ValueKey<String>(message.id), // Key helps avoid rebuilds for unchanged messages
-                                            message: Message.fromChatMessage(message, _currentUserId),
+                                            message: Message.fromChatMessage(message, _currentUserId, otherParticipantName: _otherParticipantName),
                                             isCurrentUser: isCurrentUser,
                                           );
                                         },
@@ -944,6 +962,41 @@ class _ChatScreenState extends State<ChatScreen> {
     
     // If the length of messages and first/last are the same, likely no changes
     return false;
+  }
+
+  // Load the other participant's name for direct messages
+  Future<void> _loadOtherParticipantName() async {
+    try {
+      final chatRoom = await _chatService.getChatRoomById(widget.chatRoomId);
+      if (chatRoom != null && chatRoom.isDirectMessage) {
+        String? otherUserId;
+        
+        // Try participantIds first, then fall back to memberIds
+        if (chatRoom.participantIds != null && chatRoom.participantIds!.length == 2) {
+          otherUserId = chatRoom.participantIds!.firstWhere(
+            (id) => id != _currentUserId,
+            orElse: () => '',
+          );
+        } else if (chatRoom.memberIds.length == 2) {
+          otherUserId = chatRoom.memberIds.firstWhere(
+            (id) => id != _currentUserId,
+            orElse: () => '',
+          );
+        }
+        
+        if (otherUserId != null && otherUserId.isNotEmpty) {
+          final userService = UserService();
+          final otherUser = await userService.getUser(otherUserId);
+          if (otherUser != null && mounted) {
+            setState(() {
+              _otherParticipantName = otherUser.name;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print('Error loading other participant name: $e');
+    }
   }
 }
 
