@@ -1,7 +1,7 @@
 name: gxit_2025
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.3.1+10
+version: 1.5.2+14
 
 environment:
   sdk: '>=3.6.1 <4.0.0'
