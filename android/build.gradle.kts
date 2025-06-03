@@ -5,11 +5,11 @@ buildscript {
     }
     dependencies {
         classpath("com.android.tools.build:gradle:8.6.0")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.0")
         
         // FlutterFire dependencies
-        classpath("com.google.gms:google-services:4.3.15")
-        classpath("com.google.firebase:firebase-crashlytics-gradle:2.9.8")
+        classpath("com.google.gms:google-services:4.4.0")
+        classpath("com.google.firebase:firebase-crashlytics-gradle:2.9.9")
     }
 }
 
@@ -17,6 +17,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        jcenter()
     }
 }
 
@@ -26,7 +27,16 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
+    
+    // Add configuration for all subprojects
+    project.configurations.all {
+        resolutionStrategy.apply {
+            force("androidx.core:core-ktx:1.12.0")
+            force("androidx.core:core:1.12.0")
+        }
+    }
 }
+
 subprojects {
     project.evaluationDependsOn(":app")
 }

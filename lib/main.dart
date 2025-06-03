@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'dart:async';
 import 'dart:io';
 import 'firebase_options.dart';
@@ -10,6 +11,7 @@ import 'theme.dart';
 import 'services/user_service.dart';
 import 'services/app_startup_service.dart';
 import 'services/lifecycle_service.dart';
+import 'services/crashlytics_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/self_description_screen.dart';
@@ -19,6 +21,9 @@ import 'screens/needs_screen.dart';
 
 // Initialize a global instance that can be accessed from anywhere
 final appStartupService = AppStartupService();
+
+// Initialize the Crashlytics service
+final crashlyticsService = CrashlyticsService();
 
 // Initialize lifecycle service
 late final LifecycleService lifecycleService;
@@ -31,11 +36,14 @@ void _handleFlutterError(FlutterErrorDetails details) {
   print('Stack trace: ${details.stack}');
   print('Error location: ${details.library}');
   print('Error context: ${details.context}');
+
+  // Report error to Firebase Crashlytics
+  FirebaseCrashlytics.instance.recordFlutterFatalError(details);
 }
 
 Future<void> main() async {
   // Set up Flutter error handling
-  FlutterError.onError = _handleFlutterError; 
+  FlutterError.onError = _handleFlutterError;
 
   // Catch any errors in the Zone
   runZonedGuarded(
@@ -50,10 +58,17 @@ Future<void> main() async {
         );
         print('Firebase initialized successfully');
 
+        // Initialize Crashlytics service
+        await crashlyticsService.initializeCrashlytics();
+
+        // Pass all uncaught Flutter framework errors to Crashlytics
+        FlutterError.onError =
+            FirebaseCrashlytics.instance.recordFlutterFatalError;
+
         // Configure Firestore settings with retry logic
         int retryCount = 0;
         const maxRetries = 3;
-        
+
         while (retryCount < maxRetries) {
           try {
             FirebaseFirestore.instance.settings = const Settings(
@@ -98,7 +113,15 @@ Future<void> main() async {
       } catch (e, stackTrace) {
         print('Critical error during initialization: $e');
         print('Stack trace: $stackTrace');
-        
+
+        // Report error to Crashlytics if it's available
+        try {
+          await crashlyticsService.logError(e, stackTrace, fatal: true);
+        } catch (_) {
+          // If Crashlytics isn't initialized yet, just log the error
+          print('Could not record error to Crashlytics: $_');
+        }
+
         // Run a simplified version of the app that displays the error
         runApp(
           MaterialApp(
@@ -154,7 +177,9 @@ Future<void> main() async {
     (error, stackTrace) {
       print('Uncaught error: $error');
       print('Stack trace: $stackTrace');
-      // Add error reporting here if needed
+
+      // Report error to Firebase Crashlytics using our service
+      crashlyticsService.logError(error, stackTrace, fatal: true);
     },
   );
 }
@@ -197,10 +222,12 @@ class MainApp extends StatelessWidget {
             future: () async {
               try {
                 await userService.ensureUserExists(user);
-                
+
                 // Check if user has completed all required steps
-                final hasDescription = await userService.hasCompletedSelfDescription(user.uid);
-                final hasPreferences = await userService.hasCompletedPreferences(user.uid);
+                final hasDescription =
+                    await userService.hasCompletedSelfDescription(user.uid);
+                final hasPreferences =
+                    await userService.hasCompletedPreferences(user.uid);
                 final hasWants = await userService.hasCompletedWants(user.uid);
                 final hasNeeds = await userService.hasCompletedNeeds(user.uid);
                 return {
@@ -223,8 +250,8 @@ class MainApp extends StatelessWidget {
               }
 
               // Check if there was an error while ensuring user exists
-              if (ensureSnapshot.hasError || 
-                  ensureSnapshot.data == null || 
+              if (ensureSnapshot.hasError ||
+                  ensureSnapshot.data == null ||
                   ensureSnapshot.data!['success'] == false) {
                 return Scaffold(
                   body: Center(
@@ -287,17 +314,17 @@ class MainApp extends StatelessWidget {
               if (ensureSnapshot.data!['hasDescription'] == false) {
                 return SelfDescriptionScreen(userId: user.uid);
               }
-              
+
               // Check if user needs to complete preferences
               if (ensureSnapshot.data!['hasPreferences'] == false) {
                 return PreferencesScreen(userId: user.uid);
               }
-              
+
               // Check if user needs to complete wants
               if (ensureSnapshot.data!['hasWants'] == false) {
                 return WantsScreen(userId: user.uid);
               }
-              
+
               // Check if user needs to complete needs
               if (ensureSnapshot.data!['hasNeeds'] == false) {
                 return NeedsScreen(userId: user.uid);

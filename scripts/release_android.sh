@@ -9,18 +9,34 @@ usage() {
   echo "  patch: Increases the third number (1.0.0 → 1.0.1)"
   echo "  minor: Increases the second number and resets patch (1.0.1 → 1.1.0)"
   echo "  major: Increases the first number and resets others (1.1.0 → 2.0.0)"
-  exit 1
+  echo ""
+  echo "If no argument is provided, you will be prompted to select a version type."
 }
 
 # Check for version type argument
-if [ $# -ne 1 ]; then
-  usage
-fi
-
-VERSION_TYPE=$1
-
-if [ "$VERSION_TYPE" != "patch" ] && [ "$VERSION_TYPE" != "minor" ] && [ "$VERSION_TYPE" != "major" ]; then
-  usage
+if [ $# -eq 1 ]; then
+  VERSION_TYPE=$1
+  
+  if [ "$VERSION_TYPE" != "patch" ] && [ "$VERSION_TYPE" != "minor" ] && [ "$VERSION_TYPE" != "major" ]; then
+    usage
+    exit 1
+  fi
+else
+  # If no argument provided, ask interactively
+  echo "Select version update type:"
+  echo "1) patch: Increases the third number (1.0.0 → 1.0.1)"
+  echo "2) minor: Increases the second number and resets patch (1.0.1 → 1.1.0)"
+  echo "3) major: Increases the first number and resets others (1.1.0 → 2.0.0)"
+  read -p "Enter your choice (1-3): " VERSION_CHOICE
+  
+  case $VERSION_CHOICE in
+    1) VERSION_TYPE="patch" ;;
+    2) VERSION_TYPE="minor" ;;
+    3) VERSION_TYPE="major" ;;
+    *) echo "Invalid choice. Exiting."; exit 1 ;;
+  esac
+  
+  echo "Selected: $VERSION_TYPE"
 fi
 
 # Get script directory

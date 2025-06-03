@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../constants.dart';
 import '../services/user_service.dart';
 import '../services/chat_service.dart';
+import '../services/crashlytics_service.dart';
 import '../models/user_model.dart';
 import '../widgets/area_rooms_section.dart';
 import '../widgets/private_rooms_section.dart';
@@ -159,7 +160,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   // New method for navigating to existing chat rooms
-  void _navigateToChatRoom(BuildContext context, String roomId, String roomName) {
+  void _navigateToChatRoom(
+      BuildContext context, String roomId, String roomName) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -278,20 +280,115 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 ],
                               ),
                               child: IconButton(
-                                icon: const Icon(Icons.bug_report, color: Colors.green),
+                                icon: const Icon(Icons.bug_report,
+                                    color: Colors.green),
                                 onPressed: () async {
                                   debugPrint('=== MANUAL DEBUG TRIGGER ===');
                                   final locationService = LocationService();
-                                  final rooms = await locationService.getPrivateChatRooms();
-                                  debugPrint('Manual debug: Found ${rooms.length} private rooms');
+                                  final rooms = await locationService
+                                      .getPrivateChatRooms();
+                                  debugPrint(
+                                      'Manual debug: Found ${rooms.length} private rooms');
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Debug: Found ${rooms.length} private rooms. Check console for details.'),
+                                        content: Text(
+                                            'Debug: Found ${rooms.length} private rooms. Check console for details.'),
                                         backgroundColor: Colors.green,
                                       ),
                                     );
                                   }
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                        // Crashlytics test button
+                        AnimatedBuilder(
+                          animation: _pulseController,
+                          builder: (context, child) {
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.red.withOpacity(
+                                      0.3 * _pulseAnimation.value,
+                                    ),
+                                    blurRadius: 8 * _pulseAnimation.value,
+                                    spreadRadius: 1 * _pulseAnimation.value,
+                                  ),
+                                ],
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.report_problem,
+                                    color: Colors.red),
+                                onPressed: () {
+                                  // Show test options
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('Crashlytics Test'),
+                                      backgroundColor: Colors.black87,
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text('Choose a test option:'),
+                                          const SizedBox(height: 16),
+                                          ElevatedButton(
+                                            onPressed: () async {
+                                              Navigator.pop(context);
+                                              // Test non-fatal error
+                                              final crashlytics =
+                                                  CrashlyticsService();
+                                              await crashlytics
+                                                  .testNonFatalError();
+
+                                              if (mounted) {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                        'Non-fatal error reported to Crashlytics'),
+                                                    backgroundColor:
+                                                        Colors.orange,
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.orange,
+                                            ),
+                                            child: const Text(
+                                                'Test Non-Fatal Error'),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          ElevatedButton(
+                                            onPressed: () {
+                                              Navigator.pop(context);
+                                              // Force crash
+                                              final crashlytics =
+                                                  CrashlyticsService();
+                                              crashlytics.testCrashlytics();
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.red,
+                                            ),
+                                            child: const Text(
+                                                'Force Crash (App will crash!)'),
+                                          ),
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context),
+                                          child: const Text('Cancel'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
                                 },
                               ),
                             );
@@ -340,7 +437,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     _buildSectionHeader('Area Rooms'),
                     SliverToBoxAdapter(
                       child: AreaRoomsSection(
-                        onRoomTap: (roomId, roomName) => _navigateToChatRoom(context, roomId, roomName),
+                        onRoomTap: (roomId, roomName) =>
+                            _navigateToChatRoom(context, roomId, roomName),
                       ),
                     ),
 
@@ -348,7 +446,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     _buildSectionHeader('Private Rooms'),
                     SliverToBoxAdapter(
                       child: PrivateRoomsSection(
-                        onRoomTap: (roomId, roomName) => _navigateToChatRoom(context, roomId, roomName),
+                        onRoomTap: (roomId, roomName) =>
+                            _navigateToChatRoom(context, roomId, roomName),
                       ),
                     ),
 
@@ -359,7 +458,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         padding: const EdgeInsets.only(top: 8.0),
                         child: ActiveChatSection(
                           onChatTap: (name) => _navigateToChat(context, name),
-                          onChatRoomTap: (roomId, roomName) => _navigateToChatRoom(context, roomId, roomName),
+                          onChatRoomTap: (roomId, roomName) =>
+                              _navigateToChatRoom(context, roomId, roomName),
                         ),
                       ),
                     ),
@@ -690,7 +790,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const ChatsScreen()),
+                            MaterialPageRoute(
+                                builder: (context) => const ChatsScreen()),
                           );
                         },
                         style: TextButton.styleFrom(
@@ -753,10 +854,9 @@ class Particle {
 class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = Colors.blue.withOpacity(0.1)
-          ..strokeWidth = 0.5;
+    final paint = Paint()
+      ..color = Colors.blue.withOpacity(0.1)
+      ..strokeWidth = 0.5;
 
     // Horizontal lines
     final horizontalCount = 15;
