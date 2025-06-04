@@ -6,6 +6,7 @@
 -keep class io.flutter.**  { *; }
 -keep class io.flutter.plugins.**  { *; }
 -keep class io.flutter.plugin.editing.** { *; }
+-keep class io.flutter.embedding.** { *; }
 
 # Firebase
 -keep class com.google.firebase.** { *; }
@@ -81,4 +82,8 @@
     native <methods>;
 }
 -dontwarn com.sun.jna.**
--dontwarn java.lang.instrument.** 
+-dontwarn java.lang.instrument.**
+
+# Prevent native library stripping
+-keep class **.libflutter.so
+-keep class **.libapp.so 

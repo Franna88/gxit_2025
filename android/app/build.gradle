@@ -57,6 +57,12 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+        
+        // Define the supported ABIs for the app
+        ndk {
+            // Include ARM 64-bit, ARM 32-bit, and x86_64 for emulator testing
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
     }
 
     buildTypes {
@@ -96,8 +102,9 @@ android {
         
         // Configure native library handling
         jniLibs {
-            useLegacyPackaging = true
+            useLegacyPackaging = false  // Use modern packaging approach
             keepDebugSymbols += ['**/*.so']
+            pickFirsts += ['lib/**/libflutter.so'] // Ensure only one version of libflutter.so is included
         }
     }
 }
@@ -141,4 +148,17 @@ dependencies {
 
 flutter {
     source = "../.."
+}
+
+// Force the build system to keep all native libraries
+bundle {
+    language {
+        enableSplit = false
+    }
+    density {
+        enableSplit = false
+    }
+    abi {
+        enableSplit = false
+    }
 }
