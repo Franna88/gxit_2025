@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/chat_message.dart';
 import '../models/chat_room.dart';
 import '../models/user_mood.dart';
+import '../models/user_model.dart';
 import '../services/chat_service.dart';
 import '../constants.dart';
 import '../widgets/message_bubble.dart';
@@ -37,21 +38,23 @@ class Message {
     this.reactions,
   });
 
-  factory Message.fromChatMessage(ChatMessage chatMessage, String currentUserId, {String? otherParticipantName}) {
+  factory Message.fromChatMessage(ChatMessage chatMessage, String currentUserId,
+      {String? otherParticipantName}) {
     final isCurrentUser = chatMessage.senderId == currentUserId;
-    
+
     // For direct messages, use the other participant's name for non-current user messages
     String displayName;
     if (isCurrentUser) {
       displayName = 'You';
-    } else if (otherParticipantName != null && otherParticipantName.isNotEmpty) {
+    } else if (otherParticipantName != null &&
+        otherParticipantName.isNotEmpty) {
       // Use the other participant's name for direct messages
       displayName = otherParticipantName;
     } else {
       // Fallback to the stored sender name
       displayName = chatMessage.senderName;
     }
-    
+
     return Message(
       id: chatMessage.id,
       senderId: chatMessage.senderId,
@@ -63,7 +66,7 @@ class Message {
       reactions: chatMessage.reactions,
     );
   }
-  
+
   // Override equality to prevent unnecessary rebuilds
   @override
   bool operator ==(Object other) {
@@ -113,13 +116,13 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    
+
     // Load other participant's name for direct messages
     _loadOtherParticipantName();
-    
+
     // First attempt to load from Firestore
     _loadInitialMessages();
-    
+
     // Schedule a force refresh after a short delay to ensure all messages load
     // This is especially important for accounts with sync issues like Litha's
     Future.delayed(const Duration(seconds: 1), () {
@@ -127,14 +130,14 @@ class _ChatScreenState extends State<ChatScreen> {
         _forceRefreshMessages();
       }
     });
-    
+
     // Do another refresh after 3 seconds to catch any delayed messages
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         _forceRefreshMessages();
       }
     });
-    
+
     // Final refresh attempt to ensure we have all messages
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted) {
@@ -179,7 +182,8 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       } else {
         // If no messages found, try a fallback approach specifically for Litha's account
-        debugPrint('No messages found with initial approach, trying fallback...');
+        debugPrint(
+            'No messages found with initial approach, trying fallback...');
 
         try {
           // Force reload with a slight delay to ensure Firebase returns results
@@ -190,16 +194,16 @@ class _ChatScreenState extends State<ChatScreen> {
               .orderBy('timestamp', descending: true)
               .limit(30)
               .get();
-              
+
           final parsedMessages = fallbackMessages.docs
               .map((doc) => ChatMessage.fromFirestore(doc))
               .toList();
-          
+
           // Store these messages too
           if (parsedMessages.isNotEmpty) {
             _updateLatestUserMessages(parsedMessages);
           }
-          
+
           if (mounted) {
             setState(() {
               if (parsedMessages.isNotEmpty) {
@@ -239,7 +243,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _focusNode.requestFocus();
 
     // Create a local temporary message to show immediately
-    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}_${_currentUserId.hashCode}';
+    final tempId =
+        'temp_${DateTime.now().millisecondsSinceEpoch}_${_currentUserId.hashCode}';
     final tempMessage = ChatMessage(
       id: tempId,
       content: message,
@@ -249,28 +254,29 @@ class _ChatScreenState extends State<ChatScreen> {
       timestamp: DateTime.now(),
       mood: _selectedMood,
     );
-    
+
     // Single setState to add the message and set sending state
     setState(() {
-      _messages.insert(0, tempMessage); // Add at the beginning since we display in reverse
+      _messages.insert(
+          0, tempMessage); // Add at the beginning since we display in reverse
       _sendingMessage = true;
       _errorMessage = null;
     });
-    
+
     // Also add to our latest user messages map for persistence
     _latestUserMessages[_currentUserId] = tempMessage;
-    
+
     // Try to immediately persist this message using chatService's cache - do this outside setState
     await _chatService.addToLocalCache(widget.chatRoomId, [tempMessage]);
 
     try {
       final finalMood = _selectedMood; // Capture current mood before resetting
-      
+
       // Reset mood state separately to avoid flickering in the main list
       setState(() {
         _selectedMood = null;
       });
-      
+
       try {
         final success = await _chatService.sendMessage(
           chatRoomId: widget.chatRoomId,
@@ -293,7 +299,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } catch (e) {
       debugPrint('Error sending message: $e');
-      
+
       setState(() {
         _errorMessage = 'Error: ${e.toString().split(': ').last}';
       });
@@ -355,7 +361,8 @@ class _ChatScreenState extends State<ChatScreen> {
               backgroundColor: const Color(0xFF1A1A2E),
             ),
             body: const Center(
-              child: Text('Chat room not found', style: TextStyle(color: Colors.white)),
+              child: Text('Chat room not found',
+                  style: TextStyle(color: Colors.white)),
             ),
           );
         }
@@ -375,7 +382,8 @@ class _ChatScreenState extends State<ChatScreen> {
           },
           child: Scaffold(
             appBar: AppBar(
-              backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+              backgroundColor:
+                  isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
               elevation: 0,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -394,16 +402,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      // For direct messages, prioritize the other participant's name
-                      chatRoom.isDirectMessage && _otherParticipantName != null
-                          ? _otherParticipantName!
-                          : (chatRoom.name.toLowerCase() == "new people" || 
-                             (chatRoom.isDirectMessage && widget.contactName.isNotEmpty && widget.contactName != "Chat") ||
-                             chatRoom.name.trim().isEmpty) 
-                                ? widget.contactName 
-                                : chatRoom.name,
-                      overflow: TextOverflow.ellipsis
-                    ),
+                        // COMPREHENSIVE TITLE RESOLUTION LOGIC
+                        // Priority order: loaded participant name -> extracted from room name -> fallback to widget.contactName
+                        _getResolvedChatTitle(chatRoom),
+                        overflow: TextOverflow.ellipsis),
                   ),
                 ],
               ),
@@ -415,7 +417,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     tooltip: 'Invite Users',
                     onPressed: () => _showInviteUsersDialog(context, chatRoom),
                   ),
-                  
+
                 // Share Room ID button
                 IconButton(
                   icon: const Icon(Icons.share),
@@ -435,7 +437,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    isDarkMode ? AppColors.darkBackground : Colors.grey.shade100,
+                    isDarkMode
+                        ? AppColors.darkBackground
+                        : Colors.grey.shade100,
                     isDarkMode
                         ? AppColors.darkBackground.withOpacity(0.9)
                         : Colors.white,
@@ -456,10 +460,13 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                               )
                             : StreamBuilder<List<ChatMessage>>(
-                                key: ValueKey<String>('message_stream_${widget.chatRoomId}'),
-                                stream: _chatService.getChatMessagesStream(widget.chatRoomId),
+                                key: ValueKey<String>(
+                                    'message_stream_${widget.chatRoomId}'),
+                                stream: _chatService
+                                    .getChatMessagesStream(widget.chatRoomId),
                                 builder: (context, snapshot) {
-                                  if (snapshot.connectionState == ConnectionState.waiting &&
+                                  if (snapshot.connectionState ==
+                                          ConnectionState.waiting &&
                                       _messages.isEmpty) {
                                     return const Center(
                                       child: CircularProgressIndicator(),
@@ -468,22 +475,26 @@ class _ChatScreenState extends State<ChatScreen> {
 
                                   // Create a combined list that prioritizes snapshot data but falls back to local messages
                                   List<ChatMessage> combinedMessages = [];
-                                  
+
                                   // First add messages from the stream if available
-                                  if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                                  if (snapshot.hasData &&
+                                      snapshot.data!.isNotEmpty) {
                                     // Don't modify combinedMessages directly if it's the same as before
                                     final newMessages = snapshot.data!;
-                                    
+
                                     // Use our optimized method to check if we need to rebuild
-                                    final needsRebuild = _shouldRebuildMessagesList(_messages, newMessages);
-                                    
+                                    final needsRebuild =
+                                        _shouldRebuildMessagesList(
+                                            _messages, newMessages);
+
                                     if (needsRebuild) {
                                       combinedMessages.addAll(newMessages);
                                       // Store latest message from each sender
                                       _updateLatestUserMessages(newMessages);
-                                      
+
                                       // Update _messages but avoid triggering a rebuild
-                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
                                         if (mounted) {
                                           _messages.clear();
                                           _messages.addAll(combinedMessages);
@@ -495,34 +506,43 @@ class _ChatScreenState extends State<ChatScreen> {
                                     }
                                   } else if (_messages.isNotEmpty) {
                                     // If no stream data, use existing messages
-                                    debugPrint("Using local cached messages instead of empty stream data");
+                                    debugPrint(
+                                        "Using local cached messages instead of empty stream data");
                                     combinedMessages.addAll(_messages);
                                     // Also store these in our latest messages map
                                     _updateLatestUserMessages(_messages);
                                   }
-                                  
+
                                   // Check for missing senders in this update
-                                  if (snapshot.hasData && combinedMessages.isNotEmpty) {
+                                  if (snapshot.hasData &&
+                                      combinedMessages.isNotEmpty) {
                                     // Get set of sender IDs in current messages
-                                    final currentSenderIds = combinedMessages.map((m) => m.senderId).toSet();
-                                    
+                                    final currentSenderIds = combinedMessages
+                                        .map((m) => m.senderId)
+                                        .toSet();
+
                                     // Add back any missing user messages (like Betty's)
                                     List<ChatMessage> missingMessages = [];
-                                    _latestUserMessages.forEach((senderId, message) {
-                                      if (!currentSenderIds.contains(senderId)) {
-                                        debugPrint("Re-adding message from missing sender: $senderId");
+                                    _latestUserMessages
+                                        .forEach((senderId, message) {
+                                      if (!currentSenderIds
+                                          .contains(senderId)) {
+                                        debugPrint(
+                                            "Re-adding message from missing sender: $senderId");
                                         missingMessages.add(message);
                                       }
                                     });
-                                    
+
                                     // Add missing messages without rebuilding if possible
                                     if (missingMessages.isNotEmpty) {
                                       combinedMessages.addAll(missingMessages);
                                       // Re-sort the messages by timestamp
-                                      combinedMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-                                      
+                                      combinedMessages.sort((a, b) =>
+                                          b.timestamp.compareTo(a.timestamp));
+
                                       // Update _messages in the background
-                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
                                         if (mounted) {
                                           _messages.clear();
                                           _messages.addAll(combinedMessages);
@@ -530,33 +550,45 @@ class _ChatScreenState extends State<ChatScreen> {
                                       });
                                     }
                                   }
-                                  
+
                                   // Detect when messages disappear for specific accounts
-                                  if (snapshot.hasData && snapshot.data!.isEmpty && _messages.isNotEmpty) {
-                                    debugPrint("WARNING: Stream returned empty messages when we had local messages");
+                                  if (snapshot.hasData &&
+                                      snapshot.data!.isEmpty &&
+                                      _messages.isNotEmpty) {
+                                    debugPrint(
+                                        "WARNING: Stream returned empty messages when we had local messages");
                                   }
-                                  
+
                                   // Always use the combined messages for display
-                                  final messagesToShow = combinedMessages.isNotEmpty ? combinedMessages : _messages;
-                                  
+                                  final messagesToShow =
+                                      combinedMessages.isNotEmpty
+                                          ? combinedMessages
+                                          : _messages;
+
                                   // If we have any messages to show, display them
                                   if (messagesToShow.isNotEmpty) {
                                     return RefreshIndicator(
                                       onRefresh: _forceRefreshMessages,
                                       color: AppColors.primaryBlue,
                                       child: ListView.builder(
-                                        key: ValueKey<int>(messagesToShow.length), // Key based on length to preserve scroll
+                                        key: ValueKey<int>(messagesToShow
+                                            .length), // Key based on length to preserve scroll
                                         padding: const EdgeInsets.all(8.0),
                                         reverse: true,
                                         itemCount: messagesToShow.length,
                                         itemBuilder: (context, index) {
                                           final message = messagesToShow[index];
                                           final isCurrentUser =
-                                              message.senderId == _currentUserId;
+                                              message.senderId ==
+                                                  _currentUserId;
 
                                           return MessageBubble(
-                                            key: ValueKey<String>(message.id), // Key helps avoid rebuilds for unchanged messages
-                                            message: Message.fromChatMessage(message, _currentUserId, otherParticipantName: _otherParticipantName),
+                                            key: ValueKey<String>(message
+                                                .id), // Key helps avoid rebuilds for unchanged messages
+                                            message: Message.fromChatMessage(
+                                                message, _currentUserId,
+                                                otherParticipantName:
+                                                    _otherParticipantName),
                                             isCurrentUser: isCurrentUser,
                                           );
                                         },
@@ -566,7 +598,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                     // Show empty state if we have no messages at all
                                     return Center(
                                       child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Icon(
                                             Icons.message,
@@ -591,7 +624,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   // Error message
                   if (_errorMessage != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 16),
                       color: Colors.red.withOpacity(0.1),
                       child: Text(
                         _errorMessage!,
@@ -602,7 +636,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   // Mood selector
                   if (_selectedMood != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 16),
                       color: isDarkMode ? Colors.black12 : Colors.grey.shade200,
                       child: Row(
                         children: [
@@ -635,7 +670,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   Container(
                     padding: const EdgeInsets.all(8.0),
                     decoration: BoxDecoration(
-                      color: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+                      color:
+                          isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
                       boxShadow: [
                         BoxShadow(
                           offset: const Offset(0, -2),
@@ -672,12 +708,17 @@ class _ChatScreenState extends State<ChatScreen> {
                         // Text input
                         Expanded(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: isDarkMode ? const Color(0xFF252836) : Colors.white,
+                              color: isDarkMode
+                                  ? const Color(0xFF252836)
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(24),
                               border: Border.all(
-                                color: isDarkMode ? Colors.white10 : Colors.grey.shade300,
+                                color: isDarkMode
+                                    ? Colors.white10
+                                    : Colors.grey.shade300,
                                 width: 1,
                               ),
                             ),
@@ -688,8 +729,9 @@ class _ChatScreenState extends State<ChatScreen> {
                               decoration: InputDecoration(
                                 hintText: 'Type a message...',
                                 hintStyle: TextStyle(
-                                  color:
-                                      isDarkMode ? Colors.grey : Colors.grey.shade600,
+                                  color: isDarkMode
+                                      ? Colors.grey
+                                      : Colors.grey.shade600,
                                 ),
                                 border: InputBorder.none,
                                 isDense: true,
@@ -699,7 +741,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                               ),
                               style: TextStyle(
-                                color: isDarkMode ? Colors.white : Colors.black87,
+                                color:
+                                    isDarkMode ? Colors.white : Colors.black87,
                               ),
                               maxLines: null,
                               onSubmitted: (_) => _sendMessage(),
@@ -726,7 +769,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
                                         valueColor:
-                                            AlwaysStoppedAnimation<Color>(Colors.white),
+                                            AlwaysStoppedAnimation<Color>(
+                                                Colors.white),
                                       ),
                                     )
                                   : const Icon(
@@ -894,29 +938,31 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _forceRefreshMessages() async {
     try {
-      final refreshedMessages = await _chatService.forceRefreshMessages(widget.chatRoomId);
-      
+      final refreshedMessages =
+          await _chatService.forceRefreshMessages(widget.chatRoomId);
+
       if (refreshedMessages.isNotEmpty && mounted) {
         // Before updating all messages, make sure we preserve our latest user messages
         _updateLatestUserMessages(refreshedMessages);
-        
+
         // Check if any senders from our tracked list are missing in the fresh results
         final senderIds = refreshedMessages.map((m) => m.senderId).toSet();
         List<ChatMessage> messagesToAdd = [];
-        
+
         _latestUserMessages.forEach((senderId, message) {
           if (!senderIds.contains(senderId)) {
             // This sender (like Betty) is missing in the refresh, add their message back
             messagesToAdd.add(message);
-            debugPrint("Preserving message from sender $senderId during refresh");
+            debugPrint(
+                "Preserving message from sender $senderId during refresh");
           }
         });
-        
+
         setState(() {
           // Update with the refreshed messages plus any preserved messages
           _messages.clear();
           _messages.addAll(refreshedMessages);
-          
+
           // Add any missing sender messages back
           if (messagesToAdd.isNotEmpty) {
             _messages.addAll(messagesToAdd);
@@ -936,30 +982,33 @@ class _ChatScreenState extends State<ChatScreen> {
     for (final message in messages) {
       // Only update if this is a newer message
       if (!_latestUserMessages.containsKey(message.senderId) ||
-          _latestUserMessages[message.senderId]!.timestamp.isBefore(message.timestamp)) {
+          _latestUserMessages[message.senderId]!
+              .timestamp
+              .isBefore(message.timestamp)) {
         _latestUserMessages[message.senderId] = message;
       }
     }
   }
 
   // Check if we need to rebuild the messages list
-  bool _shouldRebuildMessagesList(List<ChatMessage> oldMessages, List<ChatMessage> newMessages) {
+  bool _shouldRebuildMessagesList(
+      List<ChatMessage> oldMessages, List<ChatMessage> newMessages) {
     // Quick length check
     if (oldMessages.length != newMessages.length) return true;
     if (oldMessages.isEmpty) return newMessages.isNotEmpty;
     if (newMessages.isEmpty) return oldMessages.isNotEmpty;
-    
+
     // Check the first and last messages for changes
     // This is a quick approximation that works well for chat apps
     final firstOldMsg = oldMessages.first;
     final firstNewMsg = newMessages.first;
     final lastOldMsg = oldMessages.last;
     final lastNewMsg = newMessages.last;
-    
+
     // If the first or last messages are different, rebuild
     if (firstOldMsg.id != firstNewMsg.id) return true;
     if (lastOldMsg.id != lastNewMsg.id) return true;
-    
+
     // If the length of messages and first/last are the same, likely no changes
     return false;
   }
@@ -970,33 +1019,154 @@ class _ChatScreenState extends State<ChatScreen> {
       final chatRoom = await _chatService.getChatRoomById(widget.chatRoomId);
       if (chatRoom != null && chatRoom.isDirectMessage) {
         String? otherUserId;
-        
+
         // Try participantIds first, then fall back to memberIds
-        if (chatRoom.participantIds != null && chatRoom.participantIds!.length == 2) {
+        if (chatRoom.participantIds != null &&
+            chatRoom.participantIds!.length >= 2) {
           otherUserId = chatRoom.participantIds!.firstWhere(
             (id) => id != _currentUserId,
             orElse: () => '',
           );
-        } else if (chatRoom.memberIds.length == 2) {
+        } else if (chatRoom.memberIds.length >= 2) {
           otherUserId = chatRoom.memberIds.firstWhere(
             (id) => id != _currentUserId,
             orElse: () => '',
           );
         }
-        
+
+        debugPrint(
+            'Found other user ID: $otherUserId for room: ${chatRoom.name}');
+
         if (otherUserId != null && otherUserId.isNotEmpty) {
+          // Try to get user info with retry logic
           final userService = UserService();
-          final otherUser = await userService.getUser(otherUserId);
+          UserModel? otherUser;
+
+          // Retry up to 3 times to get user info
+          for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+              otherUser = await userService.getUser(otherUserId);
+              if (otherUser != null) break;
+
+              // Wait a bit before retrying
+              if (attempt < 3) {
+                await Future.delayed(Duration(milliseconds: 500 * attempt));
+              }
+            } catch (e) {
+              debugPrint('Attempt $attempt to get user info failed: $e');
+              if (attempt == 3) rethrow;
+            }
+          }
+
           if (otherUser != null && mounted) {
             setState(() {
-              _otherParticipantName = otherUser.name;
+              _otherParticipantName = otherUser!.name;
             });
+
+            debugPrint(
+                'SUCCESS: Direct message participant resolved: ${otherUser!.name} for room: ${chatRoom.name}');
+            return; // Successfully loaded, exit early
           }
+        }
+
+        // Enhanced fallback logic - try multiple approaches
+        String? fallbackName;
+
+        // 1. Try extracting from room name
+        if (chatRoom.name.startsWith('Chat with ')) {
+          fallbackName = chatRoom.name.substring('Chat with '.length).trim();
+          debugPrint('Extracted name from room: $fallbackName');
+        }
+
+        // 2. Try using contact name if it's not generic
+        if (fallbackName == null || fallbackName.isEmpty) {
+          if (widget.contactName.isNotEmpty &&
+              widget.contactName != "Chat" &&
+              !widget.contactName.startsWith('Chat with ')) {
+            fallbackName = widget.contactName;
+            debugPrint('Using contact name as fallback: $fallbackName');
+          }
+        }
+
+        // 3. Set the fallback name if we found one
+        if (fallbackName != null && fallbackName.isNotEmpty && mounted) {
+          setState(() {
+            _otherParticipantName = fallbackName;
+          });
+          debugPrint('Set fallback participant name: $fallbackName');
         }
       }
     } catch (e) {
-      print('Error loading other participant name: $e');
+      debugPrint('Error loading other participant name: $e');
+
+      // Final fallback - use widget.contactName if reasonable
+      if (mounted &&
+          widget.contactName.isNotEmpty &&
+          widget.contactName != "Chat" &&
+          _otherParticipantName == null) {
+        setState(() {
+          _otherParticipantName = widget.contactName;
+        });
+        debugPrint('Emergency fallback to contact name: ${widget.contactName}');
+      }
     }
+  }
+
+  // Comprehensive method to resolve the chat title with consistent logic
+  String _getResolvedChatTitle(ChatRoom chatRoom) {
+    // 1. For direct messages, prioritize the loaded participant name (most reliable)
+    if (chatRoom.isDirectMessage &&
+        _otherParticipantName != null &&
+        _otherParticipantName!.isNotEmpty) {
+      debugPrint('Using loaded participant name: $_otherParticipantName');
+      return _otherParticipantName!;
+    }
+
+    // 2. For direct messages, try to extract from room name if it's a "Chat with [Name]" pattern
+    if (chatRoom.isDirectMessage && chatRoom.name.startsWith('Chat with ')) {
+      final extractedName = chatRoom.name.substring('Chat with '.length).trim();
+      if (extractedName.isNotEmpty) {
+        debugPrint('Extracted name from room name: $extractedName');
+        return extractedName;
+      }
+    }
+
+    // 3. For direct messages, use the contact name if it's not generic
+    if (chatRoom.isDirectMessage &&
+        widget.contactName.isNotEmpty &&
+        widget.contactName != "Chat" &&
+        !widget.contactName.startsWith('Chat with ')) {
+      debugPrint(
+          'Using contact name for direct message: ${widget.contactName}');
+      return widget.contactName;
+    }
+
+    // 4. Handle empty or generic room names
+    if (chatRoom.name.toLowerCase() == "new people" ||
+        chatRoom.name.trim().isEmpty) {
+      debugPrint(
+          'Using fallback contact name for generic room: ${widget.contactName}');
+      return widget.contactName.isNotEmpty ? widget.contactName : 'Chat';
+    }
+
+    // 5. Use the room name as-is
+    debugPrint('Using room name as-is: ${chatRoom.name}');
+    return chatRoom.name;
+  }
+
+  String _extractNameFromChatRoomName(String contactName, String chatRoomName) {
+    // For direct messages, try to extract the actual participant name
+    // Check if the room name follows "Chat with [Name]" pattern
+    if (chatRoomName.startsWith('Chat with ')) {
+      final extractedName = chatRoomName.substring('Chat with '.length).trim();
+      if (extractedName.isNotEmpty && extractedName != contactName) {
+        // If the extracted name is different from contact name, it might be the correct one
+        return extractedName;
+      }
+    }
+
+    // If we can't extract a better name, use the provided contact name
+    return contactName;
   }
 }
 

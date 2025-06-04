@@ -24,14 +24,14 @@ class ChatService {
 
   // Keep a cache of messages per room to prevent flickering or disappearing messages
   final Map<String, List<ChatMessage>> _messageCache = {};
-  
+
   // Flag to check if local storage has been initialized
   bool _localStorageInitialized = false;
-  
+
   // Initialize local storage on startup
   Future<void> _initLocalStorage() async {
     if (_localStorageInitialized) return;
-    
+
     try {
       // Restore cached messages from SharedPreferences
       await _loadCachedMessagesFromStorage();
@@ -40,51 +40,55 @@ class ChatService {
       print('Error initializing local storage: $e');
     }
   }
-  
+
   // Save messages to local storage
-  Future<void> _saveMessagesToLocalStorage(String roomId, List<ChatMessage> messages) async {
+  Future<void> _saveMessagesToLocalStorage(
+      String roomId, List<ChatMessage> messages) async {
     try {
       if (messages.isEmpty) return;
-      
+
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Convert messages to JSON
       final messagesJson = messages.map((msg) {
         final map = msg.toMap();
         // Handle timestamp conversion
         if (map['timestamp'] is Timestamp) {
-          map['timestamp'] = (map['timestamp'] as Timestamp).millisecondsSinceEpoch;
+          map['timestamp'] =
+              (map['timestamp'] as Timestamp).millisecondsSinceEpoch;
         }
         return map;
       }).toList();
-      
+
       // Save to SharedPreferences
       await prefs.setString('messages_$roomId', jsonEncode(messagesJson));
-      print('Saved ${messages.length} messages to local storage for room $roomId');
+      print(
+          'Saved ${messages.length} messages to local storage for room $roomId');
     } catch (e) {
       print('Error saving messages to local storage: $e');
     }
   }
-  
+
   // Load cached messages from local storage
   Future<void> _loadCachedMessagesFromStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Get all keys from prefs that match our message pattern
-      final keys = prefs.getKeys().where((key) => key.startsWith('messages_')).toList();
-      
+      final keys =
+          prefs.getKeys().where((key) => key.startsWith('messages_')).toList();
+
       for (final key in keys) {
         final roomId = key.substring('messages_'.length);
         final json = prefs.getString(key);
-        
+
         if (json != null) {
           try {
             final List<dynamic> messagesJson = jsonDecode(json);
             final messages = messagesJson.map((jsonMsg) {
               return ChatMessage.fromMap(jsonMsg);
             }).toList();
-            
+
             // Store in cache
             _messageCache[roomId] = messages;
             print('Loaded ${messages.length} cached messages for room $roomId');
@@ -110,16 +114,18 @@ class ChatService {
   Stream<ChatRoom?> getChatRoomStream(String roomId) {
     return getChatRoomRef(roomId).snapshots().map((snapshot) {
       if (!snapshot.exists) return null;
-      
+
       final chatRoom = ChatRoom.fromFirestore(snapshot);
-      
+
       // Check for "new people" title in direct messages and fix it if needed
-      if (chatRoom.isDirectMessage && 
-          (chatRoom.name.toLowerCase() == "new people" || chatRoom.name.trim().isEmpty)) {
+      if (chatRoom.isDirectMessage &&
+          (chatRoom.name.toLowerCase() == "new people" ||
+              chatRoom.name.trim().isEmpty)) {
         // This is a temporary fix in the stream - consider updating the DB record
-        print('Found "new people" room name in a direct message - should be fixed in database');
+        print(
+            'Found "new people" room name in a direct message - should be fixed in database');
       }
-      
+
       return chatRoom;
     });
   }
@@ -144,10 +150,8 @@ class ChatService {
         .where('memberIds', arrayContains: userId)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => ChatRoom.fromFirestore(doc))
-              .toList();
-        });
+      return snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
+    });
   }
 
   // Get all public chat rooms
@@ -157,10 +161,8 @@ class ChatService {
           .where('isPublic', isEqualTo: true)
           .orderBy('createdAt', descending: true)
           .get();
-          
-      return snapshot.docs
-          .map((doc) => ChatRoom.fromFirestore(doc))
-          .toList();
+
+      return snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
     } catch (e) {
       print('Error getting public chat rooms: $e');
       return [];
@@ -175,7 +177,7 @@ class ChatService {
           .orderBy('timestamp', descending: true)
           .limit(limit)
           .get();
-          
+
       return snapshot.docs
           .map((doc) => ChatMessage.fromFirestore(doc))
           .toList();
@@ -191,83 +193,88 @@ class ChatService {
     if (!_localStorageInitialized) {
       _initLocalStorage();
     }
-    
+
     // Create a map to track messages by sender to prevent their disappearance
     Map<String, ChatMessage> latestMessagesBySender = {};
-    
+
     return _messagesCollection
         .where('chatRoomId', isEqualTo: roomId)
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-          final messages = snapshot.docs
-              .map((doc) => ChatMessage.fromFirestore(doc))
-              .toList();
-          
-          // Process and store messages by sender ID to ensure we keep them
-          for (final message in messages) {
-            // Store the latest message from each sender
-            if (!latestMessagesBySender.containsKey(message.senderId) || 
-                latestMessagesBySender[message.senderId]!.timestamp.isBefore(message.timestamp)) {
-              latestMessagesBySender[message.senderId] = message;
+      final messages =
+          snapshot.docs.map((doc) => ChatMessage.fromFirestore(doc)).toList();
+
+      // Process and store messages by sender ID to ensure we keep them
+      for (final message in messages) {
+        // Store the latest message from each sender
+        if (!latestMessagesBySender.containsKey(message.senderId) ||
+            latestMessagesBySender[message.senderId]!
+                .timestamp
+                .isBefore(message.timestamp)) {
+          latestMessagesBySender[message.senderId] = message;
+        }
+      }
+
+      // If we got messages, save them to persistent storage
+      if (messages.isNotEmpty) {
+        _saveMessagesToLocalStorage(roomId, messages);
+      }
+
+      // If we got an empty list but have cached messages, use the cache
+      if (messages.isEmpty &&
+          _messageCache.containsKey(roomId) &&
+          (_messageCache[roomId]?.isNotEmpty ?? false)) {
+        print('Using cached messages for room: $roomId');
+        return _messageCache[roomId]!;
+      }
+
+      // Otherwise, update the cache with the new messages
+      if (messages.isNotEmpty) {
+        _messageCache[roomId] = messages;
+
+        // Since we have fresh messages, rebuild our map of latest messages per sender
+        latestMessagesBySender.clear();
+        for (final message in messages) {
+          if (!latestMessagesBySender.containsKey(message.senderId) ||
+              latestMessagesBySender[message.senderId]!
+                  .timestamp
+                  .isBefore(message.timestamp)) {
+            latestMessagesBySender[message.senderId] = message;
+          }
+        }
+      } else if (_messageCache.containsKey(roomId)) {
+        // If the new stream is empty but we have cache, check if we're losing sender messages
+        // and append them to avoid losing messages from specific users
+        final cachedMessages = _messageCache[roomId]!;
+
+        // Track senders in the current stream result
+        final senderIds = messages.map((m) => m.senderId).toSet();
+
+        // Find messages from senders that are missing in this update but were in our cache
+        for (final cachedMsg in cachedMessages) {
+          if (!senderIds.contains(cachedMsg.senderId)) {
+            // We found a sender whose messages disappeared - add their latest message back
+            if (latestMessagesBySender.containsKey(cachedMsg.senderId)) {
+              messages.add(latestMessagesBySender[cachedMsg.senderId]!);
+              print(
+                  'Preserved message from sender: ${cachedMsg.senderId} to prevent disappearance');
             }
           }
-          
-          // If we got messages, save them to persistent storage
-          if (messages.isNotEmpty) {
-            _saveMessagesToLocalStorage(roomId, messages);
-          }
-          
-          // If we got an empty list but have cached messages, use the cache
-          if (messages.isEmpty && _messageCache.containsKey(roomId) && 
-              (_messageCache[roomId]?.isNotEmpty ?? false)) {
-            print('Using cached messages for room: $roomId');
-            return _messageCache[roomId]!;
-          }
-          
-          // Otherwise, update the cache with the new messages
-          if (messages.isNotEmpty) {
-            _messageCache[roomId] = messages;
-            
-            // Since we have fresh messages, rebuild our map of latest messages per sender
-            latestMessagesBySender.clear();
-            for (final message in messages) {
-              if (!latestMessagesBySender.containsKey(message.senderId) || 
-                  latestMessagesBySender[message.senderId]!.timestamp.isBefore(message.timestamp)) {
-                latestMessagesBySender[message.senderId] = message;
-              }
-            }
-          } else if (_messageCache.containsKey(roomId)) {
-            // If the new stream is empty but we have cache, check if we're losing sender messages
-            // and append them to avoid losing messages from specific users
-            final cachedMessages = _messageCache[roomId]!;
-            
-            // Track senders in the current stream result
-            final senderIds = messages.map((m) => m.senderId).toSet();
-            
-            // Find messages from senders that are missing in this update but were in our cache
-            for (final cachedMsg in cachedMessages) {
-              if (!senderIds.contains(cachedMsg.senderId)) {
-                // We found a sender whose messages disappeared - add their latest message back
-                if (latestMessagesBySender.containsKey(cachedMsg.senderId)) {
-                  messages.add(latestMessagesBySender[cachedMsg.senderId]!);
-                  print('Preserved message from sender: ${cachedMsg.senderId} to prevent disappearance');
-                }
-              }
-            }
-          }
-          
-          // Ensure we don't return an empty list if there's a temporary issue
-          if (messages.isEmpty) {
-            print('Warning: Empty messages stream for room: $roomId');
-          }
-          
-          return messages;
-        });
+        }
+      }
+
+      // Ensure we don't return an empty list if there's a temporary issue
+      if (messages.isEmpty) {
+        print('Warning: Empty messages stream for room: $roomId');
+      }
+
+      return messages;
+    });
   }
 
   // Create a new chat room
-  // 
+  //
   // Parameters:
   // - name: The name of the chat room
   // - memberIds: List of user IDs who will be members of the room
@@ -398,7 +405,7 @@ class ChatService {
         'mood': mood?.index,
         'tokenUsed': true,
       };
-      
+
       // Try to save the message with retry logic (up to 2 retries)
       DocumentReference? messageRef;
       int retries = 0;
@@ -446,17 +453,18 @@ class ChatService {
       }
 
       final room = ChatRoom.fromFirestore(roomDoc);
-      
+
       // Check if user is already a member
       if (room.memberIds.contains(userId)) {
         // User is already a member, no need to update
         return true;
       }
-      
+
       // Check if the room is public or if the user has been invited
       if (!room.isPublic) {
         // This is a private room - could add invitation check here in the future
-        throw Exception('Cannot join a private chat room without an invitation');
+        throw Exception(
+            'Cannot join a private chat room without an invitation');
       }
 
       // Update the room's member list
@@ -564,11 +572,10 @@ class ChatService {
 
     try {
       // First check if a chat room already exists between these users
-      final existingRoomsQuery =
-          await _roomsCollection
-              .where('memberIds', arrayContains: userId)
-              .where('isPublic', isEqualTo: false)
-              .get();
+      final existingRoomsQuery = await _roomsCollection
+          .where('memberIds', arrayContains: userId)
+          .where('isPublic', isEqualTo: false)
+          .get();
 
       // Look for a room that contains exactly these two users
       for (var doc in existingRoomsQuery.docs) {
@@ -622,6 +629,90 @@ class ChatService {
       return docRef.id;
     } catch (e) {
       print('Error finding or creating private chat room: $e');
+      return null;
+    }
+  }
+
+  // Find or create a direct message between the current user and another user
+  // Specifically for registered user invitations - creates direct messages that appear in active chats
+  Future<String?> findOrCreateDirectMessage({
+    required String otherUserId,
+    required String otherUserName,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) return null;
+
+    try {
+      // First check if a direct message already exists between these users
+      final existingRoomsQuery = await _roomsCollection
+          .where('memberIds', arrayContains: userId)
+          .where('isPublic', isEqualTo: false)
+          .where('isDirectMessage', isEqualTo: true)
+          .get();
+
+      // Look for a direct message that contains exactly these two users
+      for (var doc in existingRoomsQuery.docs) {
+        final room = ChatRoom.fromFirestore(doc);
+        if (room.memberIds.length == 2 &&
+            room.memberIds.contains(otherUserId) &&
+            room.memberIds.contains(userId)) {
+          return room.id;
+        }
+      }
+
+      // If no direct message exists, create a new one
+      // Check if user has enough tokens for creating a room
+      final hasTokens = await _userService.hasEnoughTokens(
+        userId,
+        ChatRoom.createRoomTokenCost,
+      );
+
+      if (!hasTokens) {
+        throw Exception('Not enough tokens to create a chat room');
+      }
+
+      // Get current user's name
+      final currentUser = await _userService.getUser(userId);
+      if (currentUser == null) return null;
+
+      // Deduct tokens from user
+      final tokenUsed = await _userService.useTokens(
+        userId,
+        ChatRoom.createRoomTokenCost,
+      );
+
+      if (!tokenUsed) {
+        return null;
+      }
+
+      // Create room name
+      final roomName = "Chat with $otherUserName";
+
+      // Create the direct message room
+      final docRef = await _roomsCollection.add({
+        'name': roomName,
+        'memberIds': [userId], // Start with only the creator
+        'memberCount': 1,
+        'creatorId': userId,
+        'isPublic': false,
+        'isDirectMessage': true, // Mark as direct message
+        'participantIds': [
+          userId,
+          otherUserId
+        ], // Set participant IDs for direct messaging
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastActivity': FieldValue.serverTimestamp(),
+      });
+
+      // Create an invitation for the other user
+      await inviteUsersToChatRoom(
+        roomId: docRef.id,
+        userIds: [otherUserId],
+      );
+
+      return docRef.id;
+    } catch (e) {
+      print('Error finding or creating direct message: $e');
       return null;
     }
   }
@@ -695,7 +786,7 @@ class ChatService {
           .where('roomId', isEqualTo: roomId)
           .where('status', isEqualTo: 'pending')
           .get();
-      
+
       return querySnapshot.docs.isNotEmpty;
     } catch (e) {
       print('Error checking pending invitation: $e');
@@ -793,11 +884,11 @@ class ChatService {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return {'id': doc.id, ...data};
-          }).toList();
-        });
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {'id': doc.id, ...data};
+      }).toList();
+    });
   }
 
   // Get chat room invitations for current user - typed version
@@ -813,10 +904,10 @@ class ChatService {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => ChatInvitation.fromFirestore(doc))
-              .toList();
-        });
+      return snapshot.docs
+          .map((doc) => ChatInvitation.fromFirestore(doc))
+          .toList();
+    });
   }
 
   // Accept a chat room invitation
@@ -829,9 +920,12 @@ class ChatService {
 
     try {
       print('Accepting invitation: $invitationId for user: $userId');
-      
+
       // Get the invitation
-      final inviteDoc = await _firestore.collection('chatInvitations').doc(invitationId).get();
+      final inviteDoc = await _firestore
+          .collection('chatInvitations')
+          .doc(invitationId)
+          .get();
       if (!inviteDoc.exists) {
         print('Error accepting invitation: Invitation does not exist');
         return false;
@@ -839,7 +933,7 @@ class ChatService {
 
       final inviteData = inviteDoc.data() as Map<String, dynamic>;
       final String roomId = inviteData['roomId'] ?? '';
-      
+
       // Validate room ID
       if (roomId.isEmpty) {
         print('Error accepting invitation: Room ID is missing or empty');
@@ -848,7 +942,8 @@ class ChatService {
 
       // Verify the current user is the invitee
       if (inviteData['inviteeId'] != userId) {
-        print('Error accepting invitation: This invitation is not for the current user');
+        print(
+            'Error accepting invitation: This invitation is not for the current user');
         throw Exception('This invitation is not for you');
       }
 
@@ -858,28 +953,30 @@ class ChatService {
       });
 
       print('Invitation status updated to accepted');
-      
+
       // First check if the room exists
       final roomDoc = await getChatRoomRef(roomId).get();
       if (!roomDoc.exists) {
         print('Error accepting invitation: Chat room does not exist: $roomId');
         throw Exception('Chat room no longer exists');
       }
-      
+
       // Verify the user is not already a member
       final room = ChatRoom.fromFirestore(roomDoc);
       if (room.memberIds.contains(userId)) {
         print('User is already a member of this room');
       } else {
-        // Add user to chat room
+        // Add user to chat room and make it active
         print('Adding user to chat room: $roomId');
         try {
-          // Update the room's member list
+          // Update the room's member list and activity timestamp to make it appear at top of active chats
           await getChatRoomRef(roomId).update({
             'memberIds': FieldValue.arrayUnion([userId]),
             'memberCount': FieldValue.increment(1),
+            'lastActivity': FieldValue
+                .serverTimestamp(), // Ensure chat appears as recently active
           });
-          print('User added to room successfully');
+          print('User added to room successfully and marked as active');
         } catch (e) {
           print('Error adding user to room: $e');
           // Continue execution - the invitation was accepted even if joining failed
@@ -888,7 +985,7 @@ class ChatService {
 
       // Check if this is meant to be a direct message
       bool isDirectMessage = inviteData['isDirectMessage'] ?? false;
-      
+
       // Only update chat room if it was originally created as a direct message
       // Don't convert private chat rooms to direct messages
       if (isDirectMessage) {
@@ -899,12 +996,28 @@ class ChatService {
             // as it should have been set correctly during room creation
             await getChatRoomRef(roomId).update({
               'participantIds': [inviterId, userId],
+              'lastActivity': FieldValue
+                  .serverTimestamp(), // Ensure direct message appears as active
             });
             print('Room updated with participant IDs for direct messaging');
           } catch (e) {
             print('Error updating room participant IDs: $e');
             // Continue execution - the invitation was accepted even if this update failed
           }
+        }
+      }
+
+      // For direct messages, send a system message to mark the chat as active
+      if (isDirectMessage) {
+        try {
+          await sendMessage(
+            chatRoomId: roomId,
+            content: "👋 Chat started! Say hello to begin your conversation.",
+          );
+          print('System message sent to activate direct message chat');
+        } catch (e) {
+          print('Error sending activation message: $e');
+          // Continue - this is not critical
         }
       }
 
@@ -922,11 +1035,10 @@ class ChatService {
 
     try {
       // Get the invitation
-      final inviteDoc =
-          await _firestore
-              .collection('chatInvitations')
-              .doc(invitationId)
-              .get();
+      final inviteDoc = await _firestore
+          .collection('chatInvitations')
+          .doc(invitationId)
+          .get();
       if (!inviteDoc.exists) return false;
 
       final inviteData = inviteDoc.data() as Map<String, dynamic>;
@@ -1020,11 +1132,10 @@ class ChatService {
       final now = DateTime.now();
 
       // Find all closed rooms with expiration dates in the past
-      final expiredRoomsSnapshot =
-          await _roomsCollection
-              .where('isClosed', isEqualTo: true)
-              .where('expiresAt', isLessThan: Timestamp.fromDate(now))
-              .get();
+      final expiredRoomsSnapshot = await _roomsCollection
+          .where('isClosed', isEqualTo: true)
+          .where('expiresAt', isLessThan: Timestamp.fromDate(now))
+          .get();
 
       if (expiredRoomsSnapshot.docs.isEmpty) return;
 
@@ -1035,10 +1146,9 @@ class ChatService {
         final roomId = doc.id;
 
         // Delete all messages in the room
-        final messagesSnapshot =
-            await _messagesCollection
-                .where('chatRoomId', isEqualTo: roomId)
-                .get();
+        final messagesSnapshot = await _messagesCollection
+            .where('chatRoomId', isEqualTo: roomId)
+            .get();
 
         for (final messageDoc in messagesSnapshot.docs) {
           batch.delete(messageDoc.reference);
@@ -1068,11 +1178,11 @@ class ChatService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return {'id': doc.id, ...data};
-          }).toList();
-        });
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {'id': doc.id, ...data};
+      }).toList();
+    });
   }
 
   // Get notifications for current user - typed version
@@ -1088,10 +1198,10 @@ class ChatService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => NotificationModel.fromFirestore(doc))
-              .toList();
-        });
+      return snapshot.docs
+          .map((doc) => NotificationModel.fromFirestore(doc))
+          .toList();
+    });
   }
 
   // Mark a notification as read
@@ -1134,7 +1244,7 @@ class ChatService {
       if (!_localStorageInitialized) {
         await _initLocalStorage();
       }
-      
+
       // Use a direct Firestore query to get the latest messages
       final snapshot = await _firestore
           .collection('messages')
@@ -1142,82 +1252,84 @@ class ChatService {
           .orderBy('timestamp', descending: true)
           .limit(50)
           .get();
-          
-      final messages = snapshot.docs
-          .map((doc) => ChatMessage.fromFirestore(doc))
-          .toList();
-          
+
+      final messages =
+          snapshot.docs.map((doc) => ChatMessage.fromFirestore(doc)).toList();
+
       // Check if we got messages from Firestore
       if (messages.isNotEmpty) {
         // Save to local storage immediately
         await _saveMessagesToLocalStorage(roomId, messages);
-        
+
         // Update the cache with these fresh messages
         _messageCache[roomId] = messages;
         print('Force refreshed ${messages.length} messages for room: $roomId');
         return messages;
       } else {
         // If we didn't get any messages from Firestore, try to load from local storage
-        if (_messageCache.containsKey(roomId) && _messageCache[roomId]!.isNotEmpty) {
+        if (_messageCache.containsKey(roomId) &&
+            _messageCache[roomId]!.isNotEmpty) {
           print('Using cached messages during force refresh for room: $roomId');
           return _messageCache[roomId]!;
         }
-        
+
         // No messages anywhere - try one more desperate approach
         try {
           final fallbackSnapshot = await _firestore
               .collection('messages')
               .where('chatRoomId', isEqualTo: roomId)
               .get();
-              
+
           if (fallbackSnapshot.docs.isNotEmpty) {
             final fallbackMessages = fallbackSnapshot.docs
                 .map((doc) => ChatMessage.fromFirestore(doc))
                 .toList();
-                
+
             // Sort by timestamp
             fallbackMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-            
+
             // Save to local storage
             await _saveMessagesToLocalStorage(roomId, fallbackMessages);
-            
+
             // Update cache
             _messageCache[roomId] = fallbackMessages;
-            print('Force refreshed ${fallbackMessages.length} messages using fallback for room: $roomId');
+            print(
+                'Force refreshed ${fallbackMessages.length} messages using fallback for room: $roomId');
             return fallbackMessages;
           }
         } catch (fallbackError) {
           print('Error in fallback refresh: $fallbackError');
         }
       }
-      
+
       return [];
     } catch (e) {
       print('Error force refreshing messages: $e');
-      
+
       // Last resort: try to use the cache
       if (_messageCache.containsKey(roomId)) {
         return _messageCache[roomId]!;
       }
-      
+
       return [];
     }
   }
 
   // Add messages directly to the local cache - helps ensure messages never disappear
-  Future<void> addToLocalCache(String roomId, List<ChatMessage> messages) async {
+  Future<void> addToLocalCache(
+      String roomId, List<ChatMessage> messages) async {
     if (messages.isEmpty) return;
-    
+
     // Ensure we have initialized local storage
     if (!_localStorageInitialized) {
       await _initLocalStorage();
     }
-    
+
     // Add to memory cache first
     if (!_messageCache.containsKey(roomId)) {
       _messageCache[roomId] = [];
     }
-    
+
     // Add new messages to existing ones (avoid duplicates by id)
     final existingIds = _messageCache[roomId]!.map((m) => m.id).toSet();
     for (final message in messages) {
@@ -1225,13 +1337,13 @@ class ChatService {
         _messageCache[roomId]!.add(message);
       }
     }
-    
+
     // Sort again after adding
     _messageCache[roomId]!.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    
+
     // Save to persistent storage
     await _saveMessagesToLocalStorage(roomId, _messageCache[roomId]!);
-    
+
     print('Added ${messages.length} messages to local cache for room $roomId');
   }
 
@@ -1242,30 +1354,35 @@ class ChatService {
         print('Error: Attempted to get chat invitation with empty ID');
         return null;
       }
-      
+
       print('Getting invitation with ID: $invitationId');
-      final doc = await _firestore.collection('chatInvitations').doc(invitationId).get();
-      
+      final doc = await _firestore
+          .collection('chatInvitations')
+          .doc(invitationId)
+          .get();
+
       if (!doc.exists) {
         print('Error: Chat invitation not found with ID: $invitationId');
         return null;
       }
-      
+
       // Log data for debugging
       final data = doc.data();
       print('Invitation data: $data');
-      
+
       if (data == null || data.isEmpty) {
         print('Error: Chat invitation data is null or empty');
         return null;
       }
-      
+
       // Validate required fields
-      if (!data.containsKey('roomId') || !data.containsKey('inviterId') || !data.containsKey('inviteeId')) {
+      if (!data.containsKey('roomId') ||
+          !data.containsKey('inviterId') ||
+          !data.containsKey('inviteeId')) {
         print('Error: Chat invitation missing required fields: $data');
         return null;
       }
-      
+
       return ChatInvitation.fromFirestore(doc);
     } catch (e) {
       print('Error getting chat invitation: $e');
@@ -1273,17 +1390,63 @@ class ChatService {
     }
   }
 
-  // Get all direct message chat rooms for current user
+  // Get direct message chats for a user with proper name resolution
   Stream<List<ChatRoom>> getDirectMessageChatsStream(String userId) {
     return _roomsCollection
         .where('memberIds', arrayContains: userId)
         .where('isDirectMessage', isEqualTo: true)
+        .orderBy('lastActivity', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => ChatRoom.fromFirestore(doc))
-              .toList();
-        });
+      return snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
+    });
+  }
+
+  // Helper method to resolve the display name for a direct message chat
+  Future<String> resolveDirectMessageDisplayName(
+      ChatRoom chatRoom, String currentUserId) async {
+    if (!chatRoom.isDirectMessage) {
+      return chatRoom.name;
+    }
+
+    // Try to get the other participant's name
+    String? otherUserId;
+
+    // Try participantIds first, then fall back to memberIds
+    if (chatRoom.participantIds != null &&
+        chatRoom.participantIds!.length >= 2) {
+      otherUserId = chatRoom.participantIds!.firstWhere(
+        (id) => id != currentUserId,
+        orElse: () => '',
+      );
+    } else if (chatRoom.memberIds.length >= 2) {
+      otherUserId = chatRoom.memberIds.firstWhere(
+        (id) => id != currentUserId,
+        orElse: () => '',
+      );
+    }
+
+    if (otherUserId != null && otherUserId.isNotEmpty) {
+      try {
+        final otherUser = await _userService.getUser(otherUserId);
+        if (otherUser != null) {
+          return otherUser.name;
+        }
+      } catch (e) {
+        print('Error resolving participant name: $e');
+      }
+    }
+
+    // Fallback: extract from room name
+    if (chatRoom.name.startsWith('Chat with ')) {
+      final extractedName = chatRoom.name.substring('Chat with '.length).trim();
+      if (extractedName.isNotEmpty) {
+        return extractedName;
+      }
+    }
+
+    // Final fallback
+    return chatRoom.name.isNotEmpty ? chatRoom.name : 'Unknown Contact';
   }
 
   // Get current user's active chats
@@ -1358,16 +1521,16 @@ class ChatService {
 
       for (final doc in querySnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>?;
-        
+
         // Check if participantIds is missing or null
         if (data != null && data['participantIds'] == null) {
           final memberIds = List<String>.from(data['memberIds'] ?? []);
-          
+
           // Update the document with participantIds
           await doc.reference.update({
             'participantIds': memberIds,
           });
-          
+
           print('Updated chat room ${doc.id} with participantIds: $memberIds');
         }
       }

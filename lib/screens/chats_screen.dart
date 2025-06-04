@@ -12,7 +12,9 @@ import '../widgets/token_balance.dart';
 import 'chat_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key});
+  final bool focusOnPrivateRooms;
+  
+  const ChatsScreen({super.key, this.focusOnPrivateRooms = false});
 
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
@@ -45,6 +47,10 @@ class _ChatsScreenState extends State<ChatsScreen>
   final Map<int, AnimationController> _hoverControllers = {};
   bool _isHovering = false;
   int _hoveredIndex = -1;
+  
+  // Scroll controller for auto-scrolling to private rooms
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _privateRoomsKey = GlobalKey();
 
   @override
   void initState() {
@@ -272,6 +278,11 @@ class _ChatsScreenState extends State<ChatsScreen>
         
         _isLoading = false;
         _filterRooms(); // Apply any existing search filter to the newly loaded rooms
+        
+        // Auto-scroll to private rooms if requested
+        if (widget.focusOnPrivateRooms) {
+          _scrollToPrivateRooms();
+        }
       });
     } catch (e, stackTrace) {
       debugPrint('Error loading chat rooms: $e');
@@ -311,6 +322,7 @@ class _ChatsScreenState extends State<ChatsScreen>
     }
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -847,6 +859,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                           // Section header for Private Chat Rooms - only show if there are results or not searching
                           if (_filteredPrivateChatRooms.isNotEmpty || (_searchQuery.isEmpty && !_isSearching))
                             SliverToBoxAdapter(
+                              key: _privateRoomsKey,
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                                 child: Text(
@@ -2453,6 +2466,26 @@ class _ChatsScreenState extends State<ChatsScreen>
         ],
       ),
     );
+  }
+
+  void _scrollToPrivateRooms() {
+    // Wait for the UI to be built, then scroll to private rooms section
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _privateRoomsKey.currentContext != null) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            final context = _privateRoomsKey.currentContext;
+            if (context != null) {
+              Scrollable.ensureVisible(
+                context,
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeInOut,
+              );
+            }
+          }
+        });
+      }
+    });
   }
 }
 

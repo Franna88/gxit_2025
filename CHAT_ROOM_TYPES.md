@@ -34,6 +34,8 @@ This document explains how different types of chat rooms are created and categor
 
 ✅ **WORKING CORRECTLY**: When a user creates a chat room and sets it to "Private", it is correctly saved as a Private Chat Room (not a Direct Message) and appears in the "Private Chat Rooms" section.
 
+✅ **UPDATED**: Private chat rooms are now excluded from the "Active Chats" section and appear only in the "Private Chat Rooms" section, ensuring clear separation between private group chats and direct messages.
+
 ## Key Implementation Details
 
 - The `isDirectMessage` flag is set only during room creation and should never be changed afterward
@@ -46,8 +48,11 @@ This document explains how different types of chat rooms are created and categor
 ## UI Sections
 
 1. **Area Rooms / Public Chat Rooms**: Shows public chat rooms (`isPublic = true`, `isDirectMessage = false`)
-2. **Private Chat Rooms**: Shows private chat rooms (`isPublic = false`, `isDirectMessage = false`)
-3. **Active Chats**: Shows all active conversations including direct messages (`isDirectMessage = true`)
+2. **Private Chat Rooms**: Shows private chat rooms without recent activity (`isPublic = false`, `isDirectMessage = false`, no activity in last 7 days)
+3. **Active Chats**: Shows:
+   - All direct messages (`isDirectMessage = true`)
+   - Any chat rooms (public or private) with recent activity in the last 7 days
+   - This ensures recently active private rooms appear here instead of cluttering the Private Rooms section
 
 ## Code Locations
 

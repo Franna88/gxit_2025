@@ -21,17 +21,44 @@ class ActiveChatSection extends StatefulWidget {
 class _ActiveChatSectionState extends State<ActiveChatSection> {
   final ChatService _chatService = ChatService();
   final String? _userId = FirebaseAuth.instance.currentUser?.uid;
-  
+
   // Cache the active chats to prevent flickering
   List<ChatRoom> _cachedActiveChats = [];
   bool _hasInitialData = false;
+
+  // Cache for resolved display names to avoid repeated lookups
+  final Map<String, String> _displayNameCache = {};
 
   // Public method to refresh data from parent
   Future<void> refresh() async {
     setState(() {
       _hasInitialData = false;
       _cachedActiveChats.clear();
+      _displayNameCache.clear(); // Clear name cache when refreshing
     });
+  }
+
+  // Method to get the display name for a chat room
+  Future<String> _getDisplayName(ChatRoom chatRoom) async {
+    // Return cached name if available
+    if (_displayNameCache.containsKey(chatRoom.id)) {
+      return _displayNameCache[chatRoom.id]!;
+    }
+
+    String displayName;
+
+    if (chatRoom.isDirectMessage && _userId != null) {
+      // For direct messages, resolve the other participant's name
+      displayName = await _chatService.resolveDirectMessageDisplayName(
+          chatRoom, _userId!);
+    } else {
+      // For group chats, use the room name as-is
+      displayName = chatRoom.name.isNotEmpty ? chatRoom.name : 'Unnamed Chat';
+    }
+
+    // Cache the resolved name
+    _displayNameCache[chatRoom.id] = displayName;
+    return displayName;
   }
 
   @override
@@ -90,7 +117,8 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
               }
 
               // Show loading only if we don't have cached data
-              if (snapshot.connectionState == ConnectionState.waiting && !_hasInitialData) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !_hasInitialData) {
                 return Container(
                   padding: const EdgeInsets.all(32),
                   child: const Center(
@@ -102,10 +130,23 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
               // Process new data if available
               if (snapshot.hasData) {
                 final chatRooms = snapshot.data!;
-                
-                // Filter to show ONLY direct messages in the active chats section
+
+                // Filter to show all active chats:
+                // 1. All direct messages (isDirectMessage = true)
+                // 2. Public group chats with recent activity (last 7 days)
+                // 3. Private group chats with recent activity (last 7 days) - these should appear here, not in Private Rooms
                 final activeChats = chatRooms
-                    .where((room) => !room.isClosed && room.isDirectMessage)
+                    .where((room) =>
+                        !room.isClosed &&
+                        (room.isDirectMessage || // Include all direct messages
+                            (room
+                                    .isPublic && // Only include PUBLIC group chats with recent activity
+                                room.lastActivity != null &&
+                                DateTime.now()
+                                        .difference(room.lastActivity!)
+                                        .inDays <
+                                    7) // Include public group chats with recent activity
+                        ))
                     .toList()
                   ..sort((a, b) {
                     final aTime = a.lastActivity ?? a.createdAt;
@@ -128,7 +169,7 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
 
               // Use cached data for display to prevent flickering
               final displayChats = _cachedActiveChats;
-              
+
               if (displayChats.isEmpty) {
                 return _buildEmptyState();
               }
@@ -144,12 +185,13 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
   // Check if we should update the cache (to prevent unnecessary rebuilds)
   bool _shouldUpdateCache(List<ChatRoom> newChats) {
     if (_cachedActiveChats.length != newChats.length) return true;
-    
+
     for (int i = 0; i < newChats.length; i++) {
       final newChat = newChats[i];
-      final cachedChat = _cachedActiveChats.length > i ? _cachedActiveChats[i] : null;
-      
-      if (cachedChat == null || 
+      final cachedChat =
+          _cachedActiveChats.length > i ? _cachedActiveChats[i] : null;
+
+      if (cachedChat == null ||
           newChat.id != cachedChat.id ||
           newChat.lastMessage != cachedChat.lastMessage ||
           newChat.lastActivity != cachedChat.lastActivity ||
@@ -157,7 +199,7 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
         return true;
       }
     }
-    
+
     return false;
   }
 
@@ -183,13 +225,13 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
         child: Column(
           children: [
             Icon(
-              Icons.person_outline,
+              Icons.chat_bubble_outline,
               color: Colors.white.withOpacity(0.3),
               size: 48,
             ),
             const SizedBox(height: 12),
             Text(
-              'No direct messages',
+              'No active chats',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.7),
                 fontSize: 16,
@@ -198,11 +240,12 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Start a conversation with someone!',
+              'Direct messages and recently active public chats appear here.\nPrivate rooms are in the Private Rooms section.',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.5),
                 fontSize: 13,
               ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -248,8 +291,9 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
     Key? key,
   }) {
     final lastActivity = chatRoom.lastActivity ?? chatRoom.createdAt;
-    final isRecentlyActive = DateTime.now().difference(lastActivity).inMinutes < 30;
-    
+    final isRecentlyActive =
+        DateTime.now().difference(lastActivity).inMinutes < 30;
+
     return InkWell(
       key: key,
       onTap: () {
@@ -287,7 +331,9 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
                             size: 24,
                           )
                         : Text(
-                            chatRoom.name.isNotEmpty ? chatRoom.name[0].toUpperCase() : 'C',
+                            chatRoom.name.isNotEmpty
+                                ? chatRoom.name[0].toUpperCase()
+                                : 'C',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 20,
@@ -316,7 +362,7 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
               ],
             ),
             const SizedBox(width: 12),
-            
+
             // Chat Details
             Expanded(
               child: Column(
@@ -325,20 +371,42 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          chatRoom.name.isNotEmpty ? chatRoom.name : 'Unnamed Chat',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: FutureBuilder<String>(
+                          future: _getDisplayName(chatRoom),
+                          builder: (context, snapshot) {
+                            String displayText;
+                            if (snapshot.hasData) {
+                              displayText = snapshot.data!;
+                            } else {
+                              // Show loading state or fallback while resolving name
+                              displayText = chatRoom.isDirectMessage
+                                  ? (chatRoom.name.startsWith('Chat with ')
+                                      ? chatRoom.name
+                                          .substring('Chat with '.length)
+                                          .trim()
+                                      : 'Loading...')
+                                  : (chatRoom.name.isNotEmpty
+                                      ? chatRoom.name
+                                      : 'Unnamed Chat');
+                            }
+
+                            return Text(
+                              displayText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            );
+                          },
                         ),
                       ),
                       if (chatRoom.isDirectMessage)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: AppColors.primaryPurple.withOpacity(0.3),
                             borderRadius: BorderRadius.circular(8),
@@ -351,10 +419,11 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ),
-                      if (!chatRoom.isPublic && !chatRoom.isDirectMessage)
+                        )
+                      else if (!chatRoom.isPublic)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.orange.withOpacity(0.3),
                             borderRadius: BorderRadius.circular(8),
@@ -367,13 +436,30 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Public',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    chatRoom.lastMessage?.isNotEmpty == true 
-                        ? chatRoom.lastMessage! 
+                    chatRoom.lastMessage?.isNotEmpty == true
+                        ? chatRoom.lastMessage!
                         : 'No messages yet',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.7),
@@ -386,7 +472,7 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
               ),
             ),
             const SizedBox(width: 8),
-            
+
             // Time and Member Count
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -459,4 +545,4 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
       return '${difference.inDays}d';
     }
   }
-} 
+}
