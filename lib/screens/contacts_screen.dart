@@ -43,7 +43,7 @@ class _ContactsScreenState extends State<ContactsScreen>
   };
 
   // All contacts in a flat list for searching
-  List<Map<String, dynamic>> _allContacts = [];
+  final List<Map<String, dynamic>> _allContacts = [];
 
   late UserService _userService;
   late ContactsService _contactsService;
@@ -797,7 +797,7 @@ class _ContactsScreenState extends State<ContactsScreen>
         print("Invitation acceptance result: $success");
 
         // If successful, add the chat to Active Chats
-        if (success && chatRoomId != null && roomName.isNotEmpty) {
+        if (success && roomName.isNotEmpty) {
           // Get user info if possible for direct messages
           String displayName = roomName;
           ContactStatus status = ContactStatus.offline;
