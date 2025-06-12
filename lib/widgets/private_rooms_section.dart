@@ -9,9 +9,9 @@ class PrivateRoomsSection extends StatefulWidget {
   final Function(String roomId, String roomName) onRoomTap;
 
   const PrivateRoomsSection({
-    Key? key, 
+    super.key,
     required this.onRoomTap,
-  }) : super(key: key);
+  });
 
   @override
   State<PrivateRoomsSection> createState() => _PrivateRoomsSectionState();
@@ -21,8 +21,8 @@ class _PrivateRoomsSectionState extends State<PrivateRoomsSection>
     with SingleTickerProviderStateMixin {
   final LocationService _locationService = LocationService();
   List<AreaChatRoom> _privateChatRooms = [];
-  Map<String, bool> _hasUnreadMessages = {};
-  Map<String, int> _unreadCounts = {};
+  final Map<String, bool> _hasUnreadMessages = {};
+  final Map<String, int> _unreadCounts = {};
   bool _isLoading = true;
 
   late AnimationController _pulseController;
@@ -74,18 +74,28 @@ class _PrivateRoomsSectionState extends State<PrivateRoomsSection>
     });
 
     try {
-      debugPrint('PrivateRoomsSection: Starting to load private rooms...');
+      debugPrint('=== PrivateRoomsSection: Starting to load private rooms ===');
       final rooms = await _locationService.getPrivateChatRooms();
-      debugPrint('PrivateRoomsSection: Received ${rooms.length} private rooms from LocationService');
-      
+      debugPrint(
+          'PrivateRoomsSection: Received ${rooms.length} private rooms from LocationService');
+
+      // Log each room for debugging
+      for (int i = 0; i < rooms.length; i++) {
+        final room = rooms[i];
+        debugPrint(
+            'Private Room $i: ID=${room.id}, name="${room.name}", isPublic=${room.isPublic}, isDirectMessage=${room.isDirectMessage}, memberCount=${room.memberCount}');
+      }
+
       _generateUnreadStates(rooms);
 
       setState(() {
         _privateChatRooms = rooms;
         _isLoading = false;
       });
-      
-      debugPrint('PrivateRoomsSection: Updated state with ${_privateChatRooms.length} rooms');
+
+      debugPrint(
+          'PrivateRoomsSection: Updated state with ${_privateChatRooms.length} rooms');
+      debugPrint('=== PrivateRoomsSection: Load complete ===');
     } catch (e) {
       debugPrint('PrivateRoomsSection: Error loading private rooms: $e');
       setState(() {
@@ -100,31 +110,71 @@ class _PrivateRoomsSectionState extends State<PrivateRoomsSection>
     return SizedBox(
       height: 160,
       child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    color: AppColors.primaryBlue,
+                    strokeWidth: 2,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Loading Private Rooms...',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            )
           : _privateChatRooms.isEmpty
               ? _buildEmptyState()
-              : ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _privateChatRooms.length,
-                  itemBuilder: (context, index) {
-                    final room = _privateChatRooms[index];
-                    final hasUnread = _hasUnreadMessages[room.id] ?? false;
-                    final unreadCount = _unreadCounts[room.id] ?? 0;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: HorizontalChatRoomCard(
-                        name: room.name,
-                        lastMessage: room.lastMessage ?? 'No messages yet',
-                        lastActivity: room.lastActivity ?? DateTime.now(),
-                        memberCount: room.memberCount,
-                        hasUnreadMessages: hasUnread,
-                        unreadCount: unreadCount,
-                        onTap: () => widget.onRoomTap(room.id, room.name),
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Show count of private rooms found
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      child: Text(
+                        'Found ${_privateChatRooms.length} private room${_privateChatRooms.length == 1 ? '' : 's'}',
+                        style: TextStyle(
+                          color: AppColors.primaryGreen,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    );
-                  },
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _privateChatRooms.length,
+                        itemBuilder: (context, index) {
+                          final room = _privateChatRooms[index];
+                          final hasUnread =
+                              _hasUnreadMessages[room.id] ?? false;
+                          final unreadCount = _unreadCounts[room.id] ?? 0;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: HorizontalChatRoomCard(
+                              name: room.name,
+                              lastMessage:
+                                  room.lastMessage ?? 'No messages yet',
+                              lastActivity: room.lastActivity ?? DateTime.now(),
+                              memberCount: room.memberCount,
+                              hasUnreadMessages: hasUnread,
+                              unreadCount: unreadCount,
+                              onTap: () => widget.onRoomTap(room.id, room.name),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
     );
   }
@@ -168,25 +218,28 @@ class _PrivateRoomsSectionState extends State<PrivateRoomsSection>
             ),
             const SizedBox(height: 4),
             Text(
-              'Create or join private chat rooms',
+              'Private chat rooms appear here',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.4),
-                fontSize: 12,
+                fontSize: 11,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             // Debug refresh button
             ElevatedButton.icon(
               onPressed: () {
-                debugPrint('DEBUG: Manual refresh triggered');
+                debugPrint(
+                    'DEBUG: Manual refresh triggered from Private Rooms section');
                 _loadPrivateRooms();
               },
               icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('DEBUG REFRESH'),
+              label: const Text('REFRESH PRIVATE ROOMS'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
             ),
           ],
@@ -194,4 +247,4 @@ class _PrivateRoomsSectionState extends State<PrivateRoomsSection>
       ),
     );
   }
-} 
+}

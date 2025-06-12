@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../constants.dart';
-import 'home_screen.dart';
 import 'needs_screen.dart';
 import '../services/user_service.dart';
 
@@ -314,8 +313,9 @@ class _WantsScreenState extends State<WantsScreen>
                                       color: isSelected
                                           ? Colors.white
                                           : AppColors.subtleText,
-                                      fontWeight:
-                                          isSelected ? FontWeight.bold : FontWeight.w500,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w500,
                                     ),
                                   ),
                                   if (isSelected) ...[
@@ -334,7 +334,7 @@ class _WantsScreenState extends State<WantsScreen>
                       ),
 
                       const SizedBox(height: 20),
-                      
+
                       // Selected count
                       Text(
                         "${_selectedWants.length} selected",
@@ -448,17 +448,17 @@ class GridPainter extends CustomPainter {
 
     // Horizontal lines
     for (var i = 0; i < size.height; i += 30) {
-      canvas.drawLine(Offset(0, i.toDouble()),
-          Offset(size.width, i.toDouble()), paint);
+      canvas.drawLine(
+          Offset(0, i.toDouble()), Offset(size.width, i.toDouble()), paint);
     }
 
     // Vertical lines
     for (var i = 0; i < size.width; i += 30) {
-      canvas.drawLine(Offset(i.toDouble(), 0),
-          Offset(i.toDouble(), size.height), paint);
+      canvas.drawLine(
+          Offset(i.toDouble(), 0), Offset(i.toDouble(), size.height), paint);
     }
   }
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;
-} 
+}

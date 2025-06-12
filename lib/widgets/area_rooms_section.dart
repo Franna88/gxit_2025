@@ -8,8 +8,7 @@ import 'dart:math' as math;
 class AreaRoomsSection extends StatefulWidget {
   final Function(String roomId, String roomName) onRoomTap;
 
-  const AreaRoomsSection({Key? key, required this.onRoomTap})
-    : super(key: key);
+  const AreaRoomsSection({super.key, required this.onRoomTap});
 
   @override
   State<AreaRoomsSection> createState() => _AreaRoomsSectionState();
@@ -19,8 +18,8 @@ class _AreaRoomsSectionState extends State<AreaRoomsSection>
     with SingleTickerProviderStateMixin {
   final LocationService _locationService = LocationService();
   List<AreaChatRoom> _areaChatRooms = [];
-  Map<String, bool> _hasUnreadMessages = {};
-  Map<String, int> _unreadCounts = {};
+  final Map<String, bool> _hasUnreadMessages = {};
+  final Map<String, int> _unreadCounts = {};
   bool _isLoading = true;
 
   late AnimationController _pulseController;
@@ -167,4 +166,4 @@ class _AreaRoomsSectionState extends State<AreaRoomsSection>
       ),
     );
   }
-} 
+}

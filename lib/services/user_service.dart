@@ -287,25 +287,23 @@ class UserService {
 
     try {
       // Search by name
-      final nameQuerySnapshot =
-          await _firestore
-              .collection('users')
-              .where('name', isGreaterThanOrEqualTo: query)
-              .where(
-                'name',
-                isLessThanOrEqualTo: query + '\uf8ff',
-              ) // Unicode trick for prefix search
-              .limit(10)
-              .get();
+      final nameQuerySnapshot = await _firestore
+          .collection('users')
+          .where('name', isGreaterThanOrEqualTo: query)
+          .where(
+            'name',
+            isLessThanOrEqualTo: '$query\uf8ff',
+          ) // Unicode trick for prefix search
+          .limit(10)
+          .get();
 
       // Search by email
-      final emailQuerySnapshot =
-          await _firestore
-              .collection('users')
-              .where('email', isGreaterThanOrEqualTo: query)
-              .where('email', isLessThanOrEqualTo: query + '\uf8ff')
-              .limit(10)
-              .get();
+      final emailQuerySnapshot = await _firestore
+          .collection('users')
+          .where('email', isGreaterThanOrEqualTo: query)
+          .where('email', isLessThanOrEqualTo: '$query\uf8ff')
+          .limit(10)
+          .get();
 
       // Combine results
       final List<UserModel> users = [];
@@ -352,10 +350,10 @@ class UserService {
   Future<UserModel?> getCurrentUser() async {
     final user = _auth.currentUser;
     if (user == null) return null;
-    
+
     final doc = await _firestore.collection('users').doc(user.uid).get();
     if (!doc.exists) return null;
-    
+
     return UserModel.fromFirestore(doc);
   }
 
@@ -365,8 +363,224 @@ class UserService {
     // For now, we'll just return a placeholder value
     // You would typically use a system that tracks user activity timestamps
     // or uses a real-time presence system like Firebase Realtime Database
-    
+
     // For demonstration purposes only
     return userId.isNotEmpty; // Consider all valid users as online
+  }
+
+  // Get all registered users with pagination and filtering
+  Future<List<UserModel>> getAllUsers({
+    int limit = 20,
+    DocumentSnapshot? lastDocument,
+    String? searchQuery,
+    bool excludeCurrentUser = true,
+    bool excludeSystemBots = true,
+  }) async {
+    try {
+      print('getAllUsers called with:');
+      print('  limit: $limit');
+      print('  searchQuery: $searchQuery');
+      print('  excludeCurrentUser: $excludeCurrentUser');
+      print('  excludeSystemBots: $excludeSystemBots');
+      print('  currentUserId: $currentUserId');
+
+      Query query = _firestore.collection('users');
+
+      // For now, use simpler queries to avoid index issues
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        // Search by name (case-insensitive prefix search)
+        final searchLower = searchQuery.toLowerCase();
+        query = query
+            .where('name', isGreaterThanOrEqualTo: searchLower)
+            .where('name', isLessThanOrEqualTo: '$searchLower\uf8ff');
+        print('  Added search filter for: $searchLower');
+      } else {
+        // Only add ordering if not searching to avoid index issues
+        query = query.orderBy('createdAt', descending: true);
+        print('  Added orderBy: createdAt desc');
+      }
+
+      // Add pagination
+      if (lastDocument != null) {
+        query = query.startAfterDocument(lastDocument);
+        print('  Added pagination: startAfter ${lastDocument.id}');
+      }
+
+      // Limit results
+      query = query.limit(limit * 2); // Get more to account for filtering
+      print('  Added limit: ${limit * 2}');
+
+      print('  Executing query...');
+      final querySnapshot = await query.get();
+      print('  Query returned ${querySnapshot.docs.length} documents');
+
+      final allUsers = querySnapshot.docs
+          .map((doc) {
+            try {
+              final user = UserModel.fromFirestore(doc);
+              print(
+                  '  Parsed user: ${user.id} - ${user.name} (isSystemBot: ${user.isSystemBot})');
+              return user;
+            } catch (e) {
+              print('  Error parsing user ${doc.id}: $e');
+              return null;
+            }
+          })
+          .where((user) => user != null)
+          .cast<UserModel>()
+          .toList();
+
+      print('  Successfully parsed ${allUsers.length} users');
+
+      // Filter manually
+      var filteredUsers = allUsers;
+
+      // Exclude system bots if requested
+      if (excludeSystemBots) {
+        final beforeCount = filteredUsers.length;
+        filteredUsers =
+            filteredUsers.where((user) => !user.isSystemBot).toList();
+        final afterCount = filteredUsers.length;
+        print('  Excluded system bots: $beforeCount -> $afterCount users');
+      }
+
+      // Exclude current user if requested
+      if (excludeCurrentUser && currentUserId != null) {
+        final beforeCount = filteredUsers.length;
+        filteredUsers =
+            filteredUsers.where((user) => user.id != currentUserId).toList();
+        final afterCount = filteredUsers.length;
+        print('  Excluded current user: $beforeCount -> $afterCount users');
+      }
+
+      // Apply limit after filtering
+      if (filteredUsers.length > limit) {
+        filteredUsers = filteredUsers.take(limit).toList();
+        print('  Applied limit: ${filteredUsers.length} users');
+      }
+
+      print('  Final result: ${filteredUsers.length} users');
+      for (final user in filteredUsers) {
+        print('    - ${user.id}: ${user.name} (${user.email})');
+      }
+
+      return filteredUsers;
+    } catch (e, stackTrace) {
+      print('Error getting all users: $e');
+      print('Stack trace: $stackTrace');
+      return [];
+    }
+  }
+
+  // Get all registered users as a stream
+  Stream<List<UserModel>> getAllUsersStream({
+    int limit = 50,
+    String? searchQuery,
+    bool excludeCurrentUser = true,
+    bool excludeSystemBots = true,
+  }) {
+    try {
+      Query query = _firestore.collection('users');
+
+      // Exclude system bots if requested
+      if (excludeSystemBots) {
+        query = query.where('isSystemBot', isEqualTo: false);
+      }
+
+      // Add search functionality if query is provided
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        final searchLower = searchQuery.toLowerCase();
+        query = query
+            .where('name', isGreaterThanOrEqualTo: searchLower)
+            .where('name', isLessThanOrEqualTo: '$searchLower\uf8ff');
+      }
+
+      // Order by creation date (newest first)
+      query = query.orderBy('createdAt', descending: true);
+
+      // Limit results
+      query = query.limit(limit);
+
+      return query.snapshots().map((snapshot) {
+        final users =
+            snapshot.docs.map((doc) => UserModel.fromFirestore(doc)).toList();
+
+        // Exclude current user if requested
+        if (excludeCurrentUser && currentUserId != null) {
+          users.removeWhere((user) => user.id == currentUserId);
+        }
+
+        return users;
+      });
+    } catch (e) {
+      print('Error getting users stream: $e');
+      return Stream.value([]);
+    }
+  }
+
+  // Get user count statistics
+  Future<Map<String, int>> getUserStatistics() async {
+    try {
+      print('getUserStatistics called');
+
+      // Get total users (excluding system bots) - use simpler query
+      print('  Querying total users...');
+      final totalUsersQuery = await _firestore.collection('users').get();
+
+      // Filter out system bots manually
+      final totalUsers = totalUsersQuery.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>?;
+        return data != null && (data['isSystemBot'] ?? false) == false;
+      }).toList();
+
+      print(
+          '  Total users query returned: ${totalUsers.length} documents (after filtering)');
+
+      // Calculate today and week counts manually
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      final startOfWeekDay =
+          DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+
+      int todayCount = 0;
+      int weekCount = 0;
+
+      for (var doc in totalUsers) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data != null) {
+          final createdAt = data['createdAt'] as Timestamp?;
+          if (createdAt != null) {
+            final createdDate = createdAt.toDate();
+            if (createdDate.isAfter(startOfDay)) {
+              todayCount++;
+            }
+            if (createdDate.isAfter(startOfWeekDay)) {
+              weekCount++;
+            }
+          }
+        }
+      }
+
+      print('  Today count: $todayCount');
+      print('  Week count: $weekCount');
+
+      final stats = {
+        'total': totalUsers.length,
+        'today': todayCount,
+        'thisWeek': weekCount,
+      };
+
+      print('  Final statistics: $stats');
+      return stats;
+    } catch (e, stackTrace) {
+      print('Error getting user statistics: $e');
+      print('Stack trace: $stackTrace');
+      return {
+        'total': 0,
+        'today': 0,
+        'thisWeek': 0,
+      };
+    }
   }
 }

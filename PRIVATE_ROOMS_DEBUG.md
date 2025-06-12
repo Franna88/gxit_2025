@@ -3,6 +3,8 @@
 ## Issue
 Private chat rooms are not showing up in the Home page Private Rooms section, even though Firebase indicates 4 private chat rooms exist.
 
+**UPDATE**: The logic has been updated so that private rooms with recent activity (last 7 days) now appear in the "Active Chats" section instead of "Private Rooms". This prevents recently active chats from cluttering the Private Rooms section and ensures they appear where users expect to find active conversations.
+
 ## Debugging Steps Implemented
 
 ### 1. Enhanced Debug Logging
@@ -111,8 +113,14 @@ To verify in Firebase Console:
 
 ## Resolution
 
-Once you identify the issue through debugging:
-- If rooms have `isDirectMessage: true`, they're working correctly (should be in Active Chats)
-- If authentication is the issue, fix login/auth flow
-- If query is wrong, adjust the Firebase query
-- If rooms are missing fields, update Firebase documents 
+**FIXED**: The issue has been resolved by updating the filtering logic:
+
+- **Private Rooms Section**: Now shows only private rooms without recent activity (older than 7 days)
+- **Active Chats Section**: Now shows all direct messages AND any chat rooms (public or private) with activity in the last 7 days
+
+This ensures that:
+- Recently active private rooms appear in "Active Chats" where users expect to find active conversations
+- The "Private Rooms" section is reserved for dormant private rooms that users might want to revisit
+- Direct messages continue to appear in "Active Chats" as expected
+
+The two chats ("Litha & franna2" and "Litha & Gerald") that were incorrectly appearing in Private Rooms will now appear in Active Chats if they have recent activity, or be properly categorized based on their room type. 

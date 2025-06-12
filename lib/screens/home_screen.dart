@@ -12,7 +12,8 @@ import 'contacts_screen.dart';
 import 'chat_screen.dart';
 import 'chats_screen.dart';
 import 'settings_screen.dart';
-import '../services/location_service.dart';
+import 'users_list_screen.dart';
+import 'debug_users_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,6 +27,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final UserService _userService = UserService();
   final ChatService _chatService = ChatService();
   UserModel? currentUser;
+
+  // Key for refreshing private rooms section
+  final GlobalKey<State<PrivateRoomsSection>> _privateRoomsKey =
+      GlobalKey<State<PrivateRoomsSection>>();
 
   // Particle system
   final List<Particle> _particles = [];
@@ -121,6 +126,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         MaterialPageRoute(builder: (context) => const ContactsScreen()),
       );
     } else if (index == 3) {
+      // Users tab
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const UsersListScreen()),
+      );
+    } else if (index == 4) {
       // Settings tab
       Navigator.push(
         context,
@@ -176,6 +187,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Future<void> _refreshData() async {
     // Refresh user data and force rebuild of sections
     await _loadCurrentUser();
+
+    // Also refresh private rooms section if available
+    try {
+      final privateRoomsState = _privateRoomsKey.currentState;
+      if (privateRoomsState != null) {
+        // Call refresh method if it exists
+        await (privateRoomsState as dynamic).refresh();
+      }
+    } catch (e) {
+      debugPrint('Could not refresh private rooms: $e');
+    }
+
     // Force rebuild by calling setState
     if (mounted) {
       setState(() {});
@@ -261,7 +284,89 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       actions: [
                         _buildNeonIconButton(Icons.search),
                         _buildNeonIconButton(Icons.notifications_none),
-                        // Debug button for private rooms
+                        // Debug button (temporary)
+                        AnimatedBuilder(
+                          animation: _pulseController,
+                          builder: (context, child) {
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.orange.withOpacity(
+                                      0.3 * _pulseAnimation.value,
+                                    ),
+                                    blurRadius: 8 * _pulseAnimation.value,
+                                    spreadRadius: 1 * _pulseAnimation.value,
+                                  ),
+                                ],
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.bug_report,
+                                    color: Colors.orange),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const DebugUsersScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                        // Private Rooms debug button
+                        AnimatedBuilder(
+                          animation: _pulseController,
+                          builder: (context, child) {
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.purple.withOpacity(
+                                      0.3 * _pulseAnimation.value,
+                                    ),
+                                    blurRadius: 8 * _pulseAnimation.value,
+                                    spreadRadius: 1 * _pulseAnimation.value,
+                                  ),
+                                ],
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.lock,
+                                    color: Colors.purple),
+                                onPressed: () async {
+                                  debugPrint(
+                                      '=== PRIVATE ROOMS DEBUG BUTTON PRESSED ===');
+                                  try {
+                                    final privateRoomsState =
+                                        _privateRoomsKey.currentState;
+                                    if (privateRoomsState != null) {
+                                      debugPrint(
+                                          'Refreshing Private Rooms section...');
+                                      await (privateRoomsState as dynamic)
+                                          .refresh();
+                                      debugPrint(
+                                          'Private Rooms refresh completed');
+                                    } else {
+                                      debugPrint('Private Rooms state is null');
+                                    }
+                                  } catch (e) {
+                                    debugPrint(
+                                        'Error refreshing Private Rooms: $e');
+                                  }
+                                  debugPrint(
+                                      '=== PRIVATE ROOMS DEBUG COMPLETE ===');
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                        // Users list button
                         AnimatedBuilder(
                           animation: _pulseController,
                           builder: (context, child) {
@@ -280,24 +385,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 ],
                               ),
                               child: IconButton(
-                                icon: const Icon(Icons.bug_report,
-                                    color: Colors.green),
-                                onPressed: () async {
-                                  debugPrint('=== MANUAL DEBUG TRIGGER ===');
-                                  final locationService = LocationService();
-                                  final rooms = await locationService
-                                      .getPrivateChatRooms();
-                                  debugPrint(
-                                      'Manual debug: Found ${rooms.length} private rooms');
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                            'Debug: Found ${rooms.length} private rooms. Check console for details.'),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
-                                  }
+                                icon: const Icon(Icons.group,
+                                    color: Colors.white),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const UsersListScreen(),
+                                    ),
+                                  );
                                 },
                               ),
                             );
@@ -433,6 +530,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
 
+                    // User Statistics Section
+                    _buildUserStatsSection(),
+
                     // Area Rooms Section
                     _buildSectionHeader('Area Rooms'),
                     SliverToBoxAdapter(
@@ -443,9 +543,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
 
                     // Private Rooms Section
-                    _buildSectionHeader('Private Rooms'),
+                    _buildPrivateRoomsSectionHeader(),
                     SliverToBoxAdapter(
                       child: PrivateRoomsSection(
+                        key: _privateRoomsKey,
                         onRoomTap: (roomId, roomName) =>
                             _navigateToChatRoom(context, roomId, roomName),
                       ),
@@ -673,6 +774,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 label: 'Contacts',
               ),
               BottomNavigationBarItem(
+                icon: Icon(Icons.group_outlined),
+                activeIcon: Icon(Icons.group),
+                label: 'Users',
+              ),
+              BottomNavigationBarItem(
                 icon: Icon(Icons.settings_outlined),
                 activeIcon: Icon(Icons.settings),
                 label: 'Settings',
@@ -696,7 +802,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               animation: _pulseController,
               builder: (context, child) {
                 return Text(
-                  'DIRECT MESSAGES',
+                  'ACTIVE CHATS',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -791,7 +897,314 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (context) => const ChatsScreen()),
+                                builder: (context) => const ChatsScreen(
+                                    focusOnPrivateRooms: true)),
+                          );
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          backgroundColor: Colors.transparent,
+                        ),
+                        child: Text(
+                          'VIEW ALL',
+                          style: TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.8,
+                            shadows: [
+                              Shadow(
+                                color: AppColors.primaryBlue.withOpacity(
+                                  0.5 * _pulseAnimation.value,
+                                ),
+                                blurRadius: 4 * _pulseAnimation.value,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // User Statistics Section
+  Widget _buildUserStatsSection() {
+    return SliverToBoxAdapter(
+      child: FutureBuilder<Map<String, int>>(
+        future: _userService.getUserStatistics(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const SizedBox.shrink();
+          }
+
+          final stats = snapshot.data!;
+          return AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              return Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.primaryBlue.withOpacity(
+                      0.3 * _pulseAnimation.value,
+                    ),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withOpacity(
+                        0.2 * _pulseAnimation.value,
+                      ),
+                      blurRadius: 8 * _pulseAnimation.value,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'COMMUNITY STATS',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1.2,
+                            shadows: [
+                              Shadow(
+                                color: AppColors.primaryBlue.withOpacity(
+                                  0.5 * _pulseAnimation.value,
+                                ),
+                                blurRadius: 6 * _pulseAnimation.value,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryGreen.withOpacity(
+                                  0.2 * _pulseAnimation.value,
+                                ),
+                                blurRadius: 6 * _pulseAnimation.value,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const UsersListScreen(),
+                                ),
+                              );
+                            },
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              backgroundColor: Colors.transparent,
+                            ),
+                            child: Text(
+                              'VIEW ALL',
+                              style: TextStyle(
+                                color: AppColors.primaryGreen,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.8,
+                                shadows: [
+                                  Shadow(
+                                    color: AppColors.primaryGreen.withOpacity(
+                                      0.5 * _pulseAnimation.value,
+                                    ),
+                                    blurRadius: 4 * _pulseAnimation.value,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatItem(
+                            'Total Users', stats['total'] ?? 0, Icons.people),
+                        _buildStatItem(
+                            'New Today', stats['today'] ?? 0, Icons.today),
+                        _buildStatItem('This Week', stats['thisWeek'] ?? 0,
+                            Icons.date_range),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, int value, IconData icon) {
+    return Column(
+      children: [
+        Icon(
+          icon,
+          color: AppColors.primaryBlue,
+          size: 20,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value.toString(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.7),
+            fontSize: 10,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  // Specialized section header for Private Rooms with refresh button
+  Widget _buildPrivateRoomsSectionHeader() {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                return Text(
+                  'PRIVATE ROOMS',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        color: AppColors.primaryBlue.withOpacity(
+                          0.5 * _pulseAnimation.value,
+                        ),
+                        blurRadius: 8 * _pulseAnimation.value,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            Row(
+              children: [
+                // Refresh button
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryGreen.withOpacity(
+                              0.2 * _pulseAnimation.value,
+                            ),
+                            blurRadius: 6 * _pulseAnimation.value,
+                            spreadRadius: 1 * _pulseAnimation.value,
+                          ),
+                        ],
+                      ),
+                      child: TextButton.icon(
+                        onPressed: _refreshData,
+                        icon: Icon(
+                          Icons.refresh,
+                          size: 16,
+                          color: AppColors.primaryGreen,
+                        ),
+                        label: Text(
+                          'REFRESH',
+                          style: TextStyle(
+                            color: AppColors.primaryGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.8,
+                            shadows: [
+                              Shadow(
+                                color: AppColors.primaryGreen.withOpacity(
+                                  0.5 * _pulseAnimation.value,
+                                ),
+                                blurRadius: 4 * _pulseAnimation.value,
+                              ),
+                            ],
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          backgroundColor: Colors.transparent,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                // View All button
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryBlue.withOpacity(
+                              0.2 * _pulseAnimation.value,
+                            ),
+                            blurRadius: 6 * _pulseAnimation.value,
+                            spreadRadius: 1 * _pulseAnimation.value,
+                          ),
+                        ],
+                      ),
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const ChatsScreen(
+                                    focusOnPrivateRooms: true)),
                           );
                         },
                         style: TextButton.styleFrom(

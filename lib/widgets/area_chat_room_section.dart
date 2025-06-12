@@ -8,8 +8,7 @@ import 'dart:math' as math;
 class AreaChatRoomSection extends StatefulWidget {
   final Function(String) onRoomTap;
 
-  const AreaChatRoomSection({Key? key, required this.onRoomTap})
-    : super(key: key);
+  const AreaChatRoomSection({super.key, required this.onRoomTap});
 
   @override
   State<AreaChatRoomSection> createState() => _AreaChatRoomSectionState();
@@ -20,8 +19,8 @@ class _AreaChatRoomSectionState extends State<AreaChatRoomSection>
   final LocationService _locationService = LocationService();
   bool _showOfficialRooms = true;
   List<AreaChatRoom> _areaChatRooms = [];
-  Map<String, bool> _hasUnreadMessages = {};
-  Map<String, int> _unreadCounts = {};
+  final Map<String, bool> _hasUnreadMessages = {};
+  final Map<String, int> _unreadCounts = {};
   bool _isLoading = true;
 
   late AnimationController _pulseController;
@@ -137,24 +136,21 @@ class _AreaChatRoomSectionState extends State<AreaChatRoomSection>
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color:
-                        _showOfficialRooms
-                            ? AppColors.primaryBlue.withOpacity(0.2)
-                            : AppColors.primaryPurple.withOpacity(0.2),
+                    color: _showOfficialRooms
+                        ? AppColors.primaryBlue.withOpacity(0.2)
+                        : AppColors.primaryPurple.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color:
-                          _showOfficialRooms
-                              ? AppColors.primaryBlue.withOpacity(0.5)
-                              : AppColors.primaryPurple.withOpacity(0.5),
+                      color: _showOfficialRooms
+                          ? AppColors.primaryBlue.withOpacity(0.5)
+                          : AppColors.primaryPurple.withOpacity(0.5),
                       width: 1.5,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            _showOfficialRooms
-                                ? AppColors.primaryBlue.withOpacity(0.3)
-                                : AppColors.primaryPurple.withOpacity(0.3),
+                        color: _showOfficialRooms
+                            ? AppColors.primaryBlue.withOpacity(0.3)
+                            : AppColors.primaryPurple.withOpacity(0.3),
                         blurRadius: 8,
                         spreadRadius: 1,
                       ),
@@ -188,31 +184,29 @@ class _AreaChatRoomSectionState extends State<AreaChatRoomSection>
         // Room List
         SizedBox(
           height: 160,
-          child:
-              _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _areaChatRooms.length,
-                    itemBuilder: (context, index) {
-                      final room = _areaChatRooms[index];
-                      final hasUnread = _hasUnreadMessages[room.id] ?? false;
-                      final unreadCount = _unreadCounts[room.id] ?? 0;
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _areaChatRooms.length,
+                  itemBuilder: (context, index) {
+                    final room = _areaChatRooms[index];
+                    final hasUnread = _hasUnreadMessages[room.id] ?? false;
+                    final unreadCount = _unreadCounts[room.id] ?? 0;
 
-                      return HorizontalChatRoomCard(
-                        name: room.name,
-                        lastMessage:
-                            room.description ??
-                            'Join the conversation in ${room.areaName}',
-                        lastActivity: room.createdAt ?? DateTime.now(),
-                        memberCount: room.memberCount,
-                        hasUnreadMessages: hasUnread,
-                        unreadCount: unreadCount,
-                        onTap: () => widget.onRoomTap(room.name),
-                      );
-                    },
-                  ),
+                    return HorizontalChatRoomCard(
+                      name: room.name,
+                      lastMessage: room.description ??
+                          'Join the conversation in ${room.areaName}',
+                      lastActivity: room.createdAt ?? DateTime.now(),
+                      memberCount: room.memberCount,
+                      hasUnreadMessages: hasUnread,
+                      unreadCount: unreadCount,
+                      onTap: () => widget.onRoomTap(room.name),
+                    );
+                  },
+                ),
         ),
       ],
     );

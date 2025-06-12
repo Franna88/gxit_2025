@@ -176,7 +176,7 @@ class LocationService {
   ];
 
   LocationService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+      : _firestore = firestore ?? FirebaseFirestore.instance;
 
   // Get current location
   Future<Position?> getCurrentLocation() async {
@@ -261,7 +261,7 @@ class LocationService {
     // Round to 2 decimal places to create areas roughly 1.1km x 1.1km
     final lat = (latitude * 100).round() / 100;
     final lng = (longitude * 100).round() / 100;
-    return "Area_${lat}_${lng}";
+    return "Area_${lat}_$lng";
   }
 
   // Get nearby area chat rooms from Firestore
@@ -281,11 +281,10 @@ class LocationService {
         return _generateJeffreysBayAreaChatRooms();
       }
 
-      final chatRooms =
-          snapshot.docs
-              .map((doc) => AreaChatRoom.fromFirestore(doc))
-              .where((room) => _isRoomNearby(room, currentPosition))
-              .toList();
+      final chatRooms = snapshot.docs
+          .map((doc) => AreaChatRoom.fromFirestore(doc))
+          .where((room) => _isRoomNearby(room, currentPosition))
+          .toList();
 
       return chatRooms;
     } catch (e) {
@@ -340,16 +339,16 @@ class LocationService {
   Future<List<AreaChatRoom>> getOfficialAreaChatRooms() async {
     try {
       debugPrint('Fetching official area chat rooms...');
-      final snapshot =
-          await _firestore
-              .collection('areaChatRooms')
-              .where('isOfficial', isEqualTo: true)
-              // Explicitly exclude direct messages
-              .where('isDirectMessage', isEqualTo: false)
-              .orderBy('createdAt', descending: true)
-              .get();
+      final snapshot = await _firestore
+          .collection('areaChatRooms')
+          .where('isOfficial', isEqualTo: true)
+          // Explicitly exclude direct messages
+          .where('isDirectMessage', isEqualTo: false)
+          .orderBy('createdAt', descending: true)
+          .get();
 
-      debugPrint('Got ${snapshot.docs.length} official area chat rooms from Firestore');
+      debugPrint(
+          'Got ${snapshot.docs.length} official area chat rooms from Firestore');
 
       if (snapshot.docs.isEmpty) {
         debugPrint('No official rooms found, generating sample rooms...');
@@ -358,9 +357,8 @@ class LocationService {
         return generatedRooms;
       }
 
-      final rooms = snapshot.docs
-          .map((doc) => AreaChatRoom.fromFirestore(doc))
-          .toList();
+      final rooms =
+          snapshot.docs.map((doc) => AreaChatRoom.fromFirestore(doc)).toList();
       debugPrint('Mapped ${rooms.length} official area chat rooms');
       return rooms;
     } catch (e, stackTrace) {
@@ -381,7 +379,7 @@ class LocationService {
       debugPrint('User ID: $userId');
       debugPrint('User email: ${currentUser?.email}');
       debugPrint('User is anonymous: ${currentUser?.isAnonymous}');
-      
+
       if (userId == null) {
         debugPrint('ERROR: No user ID found, returning empty list');
         return [];
@@ -394,79 +392,90 @@ class LocationService {
 
       // Get regular chat rooms first
       debugPrint('Step 1: Fetching regular private chat rooms...');
-      debugPrint('Query: chatRooms where memberIds arrayContains $userId AND isPublic == false');
-      
-      final regularRoomsSnapshot =
-          await _firestore
-              .collection('chatRooms')
-              .where('memberIds', arrayContains: userId)
-              .where('isPublic', isEqualTo: false)
-              .get();
+      debugPrint(
+          'Query: chatRooms where memberIds arrayContains $userId AND isPublic == false');
 
-      debugPrint('Got ${regularRoomsSnapshot.docs.length} regular private chat rooms from Firebase');
-      
+      final regularRoomsSnapshot = await _firestore
+          .collection('chatRooms')
+          .where('memberIds', arrayContains: userId)
+          .where('isPublic', isEqualTo: false)
+          .get();
+
+      debugPrint(
+          'Got ${regularRoomsSnapshot.docs.length} regular private chat rooms from Firebase');
+
       // Log each room found
       for (int i = 0; i < regularRoomsSnapshot.docs.length; i++) {
         final doc = regularRoomsSnapshot.docs[i];
-        final data = doc.data() as Map<String, dynamic>;
-        debugPrint('Room $i: ID=${doc.id}, name=${data['name']}, isDirectMessage=${data['isDirectMessage']}, memberIds=${data['memberIds']}');
+        final data = doc.data();
+        debugPrint(
+            'Room $i: ID=${doc.id}, name=${data['name']}, isDirectMessage=${data['isDirectMessage']}, memberIds=${data['memberIds']}');
       }
-      
+
       List<AreaChatRoom> chatRooms = [];
 
       // Convert regular chat rooms to area chat rooms (with default location)
       if (regularRoomsSnapshot.docs.isNotEmpty) {
-        debugPrint('Step 2: Converting ${regularRoomsSnapshot.docs.length} regular rooms to AreaChatRoom objects...');
-        
-        final convertedRooms = regularRoomsSnapshot.docs.map((doc) {
-          final chatRoom = ChatRoom.fromFirestore(doc);
-          
-          // Skip direct messages - they should only appear in Contacts > Active Chats
-          if (chatRoom.isDirectMessage) {
-            debugPrint('SKIPPING direct message room: ${chatRoom.id} (${chatRoom.name})');
-            return null;
-          }
+        debugPrint(
+            'Step 2: Converting ${regularRoomsSnapshot.docs.length} regular rooms to AreaChatRoom objects...');
 
-          debugPrint('CONVERTING regular chat room to area chat room: ${chatRoom.id} (${chatRoom.name})');
-          // Create a pseudo area chat room
-          return AreaChatRoom(
-            id: chatRoom.id,
-            name: chatRoom.name,
-            memberIds: chatRoom.memberIds,
-            areaName: 'Private',
-            location: const GeoPoint(-34.0507, 24.9307), // Default location
-            radius: 5.0,
-            lastMessage: chatRoom.lastMessage,
-            lastSenderId: chatRoom.lastSenderId,
-            lastActivity: chatRoom.lastActivity,
-            memberCount: chatRoom.memberCount,
-            isPublic: chatRoom.isPublic,
-            creatorId: chatRoom.creatorId,
-            createdAt: chatRoom.createdAt,
-            isDirectMessage: chatRoom.isDirectMessage,
-            participantIds: chatRoom.participantIds,
-          );
-        }).where((room) => room != null).cast<AreaChatRoom>().toList();
-        
+        final convertedRooms = regularRoomsSnapshot.docs
+            .map((doc) {
+              final chatRoom = ChatRoom.fromFirestore(doc);
+
+              // Skip direct messages - they should only appear in Contacts > Active Chats
+              if (chatRoom.isDirectMessage) {
+                debugPrint(
+                    'SKIPPING direct message room: ${chatRoom.id} (${chatRoom.name})');
+                return null;
+              }
+
+              debugPrint(
+                  'CONVERTING regular chat room to area chat room: ${chatRoom.id} (${chatRoom.name})');
+              // Create a pseudo area chat room
+              return AreaChatRoom(
+                id: chatRoom.id,
+                name: chatRoom.name,
+                memberIds: chatRoom.memberIds,
+                areaName: 'Private',
+                location: const GeoPoint(-34.0507, 24.9307), // Default location
+                radius: 5.0,
+                lastMessage: chatRoom.lastMessage,
+                lastSenderId: chatRoom.lastSenderId,
+                lastActivity: chatRoom.lastActivity,
+                memberCount: chatRoom.memberCount,
+                isPublic: chatRoom.isPublic,
+                creatorId: chatRoom.creatorId,
+                createdAt: chatRoom.createdAt,
+                isDirectMessage: chatRoom.isDirectMessage,
+                participantIds: chatRoom.participantIds,
+              );
+            })
+            .where((room) => room != null)
+            .cast<AreaChatRoom>()
+            .toList();
+
         chatRooms = convertedRooms;
-        debugPrint('After filtering direct messages: ${chatRooms.length} regular private rooms remain');
+        debugPrint(
+            'After filtering direct messages: ${chatRooms.length} regular private rooms remain');
       } else {
         debugPrint('No regular private chat rooms found');
       }
 
       debugPrint('Step 3: Fetching area private chat rooms...');
-      debugPrint('Query: areaChatRooms where memberIds arrayContains $userId AND isPublic == false AND isDirectMessage == false');
-      
-      final areaRoomsSnapshot =
-          await _firestore
-              .collection('areaChatRooms')
-              .where('memberIds', arrayContains: userId)
-              .where('isPublic', isEqualTo: false)
-              // Explicitly exclude direct messages
-              .where('isDirectMessage', isEqualTo: false)
-              .get();
+      debugPrint(
+          'Query: areaChatRooms where memberIds arrayContains $userId AND isPublic == false AND isDirectMessage == false');
 
-      debugPrint('Got ${areaRoomsSnapshot.docs.length} area private chat rooms from Firebase');
+      final areaRoomsSnapshot = await _firestore
+          .collection('areaChatRooms')
+          .where('memberIds', arrayContains: userId)
+          .where('isPublic', isEqualTo: false)
+          // Explicitly exclude direct messages
+          .where('isDirectMessage', isEqualTo: false)
+          .get();
+
+      debugPrint(
+          'Got ${areaRoomsSnapshot.docs.length} area private chat rooms from Firebase');
 
       // Add area chat rooms to the list
       if (areaRoomsSnapshot.docs.isNotEmpty) {
@@ -487,14 +496,16 @@ class LocationService {
         return b.lastActivity!.compareTo(a.lastActivity!);
       });
 
-      debugPrint('Step 4: Final result - returning ${chatRooms.length} total private chat rooms');
-      
+      debugPrint(
+          'Step 4: Final result - returning ${chatRooms.length} total private chat rooms');
+
       // Log final rooms
       for (int i = 0; i < chatRooms.length; i++) {
         final room = chatRooms[i];
-        debugPrint('Final room $i: ID=${room.id}, name=${room.name}, memberCount=${room.memberCount}');
+        debugPrint(
+            'Final room $i: ID=${room.id}, name=${room.name}, memberCount=${room.memberCount}');
       }
-      
+
       debugPrint('=== END getPrivateChatRooms DEBUG ===');
       return chatRooms;
     } catch (e, stackTrace) {
@@ -537,9 +548,8 @@ class LocationService {
   // Create a new area chat room for a specific location
   Future<String?> createAreaChatRoom(AreaChatRoom room) async {
     try {
-      final docRef = await _firestore
-          .collection('areaChatRooms')
-          .add(room.toMap());
+      final docRef =
+          await _firestore.collection('areaChatRooms').add(room.toMap());
       return docRef.id;
     } catch (e) {
       debugPrint('Error creating area chat room: $e');
@@ -550,7 +560,8 @@ class LocationService {
   // Get an area chat room by ID
   Future<AreaChatRoom?> getAreaChatRoomById(String roomId) async {
     try {
-      final doc = await _firestore.collection('areaChatRooms').doc(roomId).get();
+      final doc =
+          await _firestore.collection('areaChatRooms').doc(roomId).get();
       if (doc.exists) {
         return AreaChatRoom.fromFirestore(doc);
       }
@@ -572,7 +583,7 @@ class LocationService {
           .where('isDirectMessage', isEqualTo: false)
           .orderBy('createdAt', descending: true)
           .get();
-          
+
       return snapshot.docs
           .map((doc) => AreaChatRoom.fromFirestore(doc))
           .toList();
@@ -618,8 +629,7 @@ class LocationService {
     for (final roomData in chatRoomData) {
       areaRooms.add(
         AreaChatRoom(
-          id:
-              'area-${roomData['name'].toString().toLowerCase().replaceAll(' ', '-')}',
+          id: 'area-${roomData['name'].toString().toLowerCase().replaceAll(' ', '-')}',
           name: roomData['name'] as String,
           memberIds: [],
           areaName: roomData['areaName'] as String,

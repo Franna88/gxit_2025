@@ -9,11 +9,11 @@ class TokenBalance extends StatefulWidget {
   final bool showAddButton;
 
   const TokenBalance({
-    Key? key,
+    super.key,
     this.showLabel = true,
     this.isCompact = false,
     this.showAddButton = true,
-  }) : super(key: key);
+  });
 
   @override
   State<TokenBalance> createState() => _TokenBalanceState();

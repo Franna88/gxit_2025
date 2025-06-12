@@ -12,7 +12,9 @@ import '../widgets/token_balance.dart';
 import 'chat_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key});
+  final bool focusOnPrivateRooms;
+
+  const ChatsScreen({super.key, this.focusOnPrivateRooms = false});
 
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
@@ -30,21 +32,25 @@ class _ChatsScreenState extends State<ChatsScreen>
   List<AreaChatRoom> _areaChatRooms = [];
   List<AreaChatRoom> _privateChatRooms = [];
   bool _isLoading = true;
-  bool _hasError = false;  // Add error state tracking
-  String? _errorMessage;  // Add error message tracking
-  
+  bool _hasError = false; // Add error state tracking
+  String? _errorMessage; // Add error message tracking
+
   // Search functionality
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _isSearching = false;
   List<AreaChatRoom> _filteredAreaChatRooms = [];
   List<AreaChatRoom> _filteredPrivateChatRooms = [];
-  FocusNode _searchFocusNode = FocusNode();
+  final FocusNode _searchFocusNode = FocusNode();
 
   // Animation controllers for each card's hover effect
   final Map<int, AnimationController> _hoverControllers = {};
   bool _isHovering = false;
   int _hoveredIndex = -1;
+
+  // Scroll controller for auto-scrolling to private rooms
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _privateRoomsKey = GlobalKey();
 
   @override
   void initState() {
@@ -70,7 +76,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         duration: const Duration(milliseconds: 300),
       );
     }
-    
+
     // Set up search text listener
     _searchController.addListener(_performSearch);
   }
@@ -98,8 +104,9 @@ class _ChatsScreenState extends State<ChatsScreen>
     setState(() {
       _isLoading = false;
       _hasError = true;
-      _errorMessage = 'Unable to load chats after several attempts. Please check your connection.';
-      
+      _errorMessage =
+          'Unable to load chats after several attempts. Please check your connection.';
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_errorMessage!),
@@ -120,38 +127,41 @@ class _ChatsScreenState extends State<ChatsScreen>
   void _performSearch() {
     setState(() {
       _searchQuery = _searchController.text.trim();
-      
+
       // Check if this looks like a room ID (typically a long alphanumeric string)
       // For example: g429P4B82sWC3N9snYaX
-      if (_searchQuery.length >= 20 && _searchQuery.contains(RegExp(r'^[a-zA-Z0-9]+$'))) {
+      if (_searchQuery.length >= 20 &&
+          _searchQuery.contains(RegExp(r'^[a-zA-Z0-9]+$'))) {
         // Search for room by ID
         _searchRoomById(_searchQuery);
         return;
       }
-      
+
       _filterRooms();
     });
   }
-  
+
   void _filterRooms() {
     if (_searchQuery.isEmpty) {
       _filteredAreaChatRooms = List.from(_areaChatRooms);
       _filteredPrivateChatRooms = List.from(_privateChatRooms);
     } else {
       final lowerCaseQuery = _searchQuery.toLowerCase();
-      
+
       _filteredAreaChatRooms = _areaChatRooms
-          .where((room) => 
+          .where((room) =>
               room.name.toLowerCase().contains(lowerCaseQuery) ||
-              (room.description?.toLowerCase().contains(lowerCaseQuery) ?? false) ||
+              (room.description?.toLowerCase().contains(lowerCaseQuery) ??
+                  false) ||
               room.areaName.toLowerCase().contains(lowerCaseQuery) ||
               room.id.contains(_searchQuery)) // Case-sensitive for room ID
           .toList();
-      
+
       _filteredPrivateChatRooms = _privateChatRooms
-          .where((room) => 
+          .where((room) =>
               room.name.toLowerCase().contains(lowerCaseQuery) ||
-              (room.description?.toLowerCase().contains(lowerCaseQuery) ?? false) ||
+              (room.description?.toLowerCase().contains(lowerCaseQuery) ??
+                  false) ||
               room.areaName.toLowerCase().contains(lowerCaseQuery) ||
               room.id.contains(_searchQuery)) // Case-sensitive for room ID
           .toList();
@@ -160,7 +170,7 @@ class _ChatsScreenState extends State<ChatsScreen>
 
   Future<void> _loadChatRooms() async {
     if (!mounted) return;
-    
+
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -171,7 +181,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       // Check if user is authenticated
       final userId = chatService.currentUserId;
       debugPrint('Loading chats for user: $userId');
-      
+
       if (userId == null || userId.isEmpty) {
         debugPrint('User not authenticated');
         throw Exception('User not authenticated');
@@ -182,22 +192,25 @@ class _ChatsScreenState extends State<ChatsScreen>
       final officialRooms = await _locationService.getOfficialAreaChatRooms();
       debugPrint('Loaded ${officialRooms.length} official rooms');
       if (!mounted) return;
-      
+
       debugPrint('Loading private chat rooms...');
       final privateRooms = await _locationService.getPrivateChatRooms();
       debugPrint('Loaded ${privateRooms.length} private rooms');
       if (!mounted) return;
-      
+
       // Load regular chat rooms created with createChatRoom
       debugPrint('Loading user chat rooms...');
-      final userChatRooms = await chatService.getUserChatRoomsStream(userId).first;
+      final userChatRooms =
+          await chatService.getUserChatRoomsStream(userId).first;
       debugPrint('Loaded ${userChatRooms.length} user rooms');
       if (!mounted) return;
-      
+
       // Filter out direct messages - they should only appear in Contacts > Active Chats
-      final nonDirectMessageRooms = userChatRooms.where((room) => !room.isDirectMessage);
-      debugPrint('Found ${nonDirectMessageRooms.length} non-direct message rooms');
-      
+      final nonDirectMessageRooms =
+          userChatRooms.where((room) => !room.isDirectMessage);
+      debugPrint(
+          'Found ${nonDirectMessageRooms.length} non-direct message rooms');
+
       // Convert regular ChatRoom objects to AreaChatRoom for UI display
       final publicRegularRooms = nonDirectMessageRooms
           .where((room) => room.isPublic)
@@ -219,7 +232,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 participantIds: room.participantIds,
               ))
           .toList();
-      
+
       final privateRegularRooms = nonDirectMessageRooms
           .where((room) => !room.isPublic)
           .map((room) => AreaChatRoom(
@@ -234,7 +247,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 location: const GeoPoint(0, 0),
                 radius: 0,
                 lastMessage: room.lastMessage,
-                lastActivity: room.lastActivity, 
+                lastActivity: room.lastActivity,
                 isOfficial: false,
                 isDirectMessage: room.isDirectMessage,
                 participantIds: room.participantIds,
@@ -243,47 +256,54 @@ class _ChatsScreenState extends State<ChatsScreen>
 
       setState(() {
         // Filter out any direct messages from area rooms as well (just to be safe)
-        _areaChatRooms = officialRooms.where((room) => !room.isDirectMessage).toList();
-        _privateChatRooms = privateRooms.where((room) => !room.isDirectMessage).toList();
-        
+        _areaChatRooms =
+            officialRooms.where((room) => !room.isDirectMessage).toList();
+        _privateChatRooms =
+            privateRooms.where((room) => !room.isDirectMessage).toList();
+
         // Add regular rooms while avoiding duplicates
         for (final room in publicRegularRooms) {
           if (!_areaChatRooms.any((r) => r.id == room.id)) {
             _areaChatRooms.add(room);
           }
         }
-        
+
         for (final room in privateRegularRooms) {
           if (!_privateChatRooms.any((r) => r.id == room.id)) {
             _privateChatRooms.add(room);
           }
         }
-        
+
         // Sort rooms by creation date (newest first)
         _areaChatRooms.sort((a, b) {
-          if (a.createdAt == null || b.createdAt == null) return 0;
-          return b.createdAt!.compareTo(a.createdAt!);
+          if (b.createdAt == null) return 0;
+          return b.createdAt.compareTo(a.createdAt);
         });
-        
+
         _privateChatRooms.sort((a, b) {
-          if (a.createdAt == null || b.createdAt == null) return 0;
-          return b.createdAt!.compareTo(a.createdAt!);
+          if (b.createdAt == null) return 0;
+          return b.createdAt.compareTo(a.createdAt);
         });
-        
+
         _isLoading = false;
         _filterRooms(); // Apply any existing search filter to the newly loaded rooms
+
+        // Auto-scroll to private rooms if requested
+        if (widget.focusOnPrivateRooms) {
+          _scrollToPrivateRooms();
+        }
       });
     } catch (e, stackTrace) {
       debugPrint('Error loading chat rooms: $e');
       debugPrint('Stack trace: $stackTrace');
       if (!mounted) return;
-      
+
       setState(() {
         _isLoading = false;
         _hasError = true;
-        _errorMessage = e.toString().contains('not authenticated') 
-          ? 'Please sign in to view chats'
-          : 'Error loading chats: ${e.toString()}. Please check your connection and try again.';
+        _errorMessage = e.toString().contains('not authenticated')
+            ? 'Please sign in to view chats'
+            : 'Error loading chats: ${e.toString()}. Please check your connection and try again.';
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -311,6 +331,7 @@ class _ChatsScreenState extends State<ChatsScreen>
     }
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -318,13 +339,15 @@ class _ChatsScreenState extends State<ChatsScreen>
     // Use pushReplacement if coming from a dialog or another temporary screen
     // This prevents the back button from re-entering the chat room
     final currentRoute = ModalRoute.of(context);
-    final isDialog = currentRoute?.settings.name == null || currentRoute!.settings.name!.isEmpty;
-    
+    final isDialog = currentRoute?.settings.name == null ||
+        currentRoute!.settings.name!.isEmpty;
+
     if (isDialog) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => ChatScreen(contactName: name, chatRoomId: roomId),
+          builder: (context) =>
+              ChatScreen(contactName: name, chatRoomId: roomId),
         ),
       ).then((_) {
         // Refresh room list when returning from chat screen
@@ -337,7 +360,8 @@ class _ChatsScreenState extends State<ChatsScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ChatScreen(contactName: name, chatRoomId: roomId),
+          builder: (context) =>
+              ChatScreen(contactName: name, chatRoomId: roomId),
         ),
       ).then((_) {
         // Refresh room list when returning from chat screen
@@ -383,7 +407,7 @@ class _ChatsScreenState extends State<ChatsScreen>
     } else if (name.contains("Cleanup") || name.contains("Environment")) {
       return 'For Environmental Activists';
     } else {
-      return 'Community Space in ' + areaName;
+      return 'Community Space in $areaName';
     }
   }
 
@@ -426,7 +450,7 @@ class _ChatsScreenState extends State<ChatsScreen>
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       // Try to find in chatRooms collection
       final room = await chatService.getChatRoomById(roomId);
@@ -434,7 +458,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         setState(() {
           _isLoading = false;
         });
-        
+
         // Check if user is already a member
         if (room.memberIds.contains(chatService.currentUserId)) {
           // Navigate to chat if user is already a member
@@ -460,14 +484,14 @@ class _ChatsScreenState extends State<ChatsScreen>
           return;
         }
       }
-      
+
       // If not found, try in areaChatRooms collection
       final areaRoom = await _locationService.getAreaChatRoomById(roomId);
       if (areaRoom != null) {
         setState(() {
           _isLoading = false;
         });
-        
+
         // Check if user is already a member
         if (areaRoom.memberIds.contains(chatService.currentUserId)) {
           // Navigate to chat if user is already a member
@@ -493,12 +517,12 @@ class _ChatsScreenState extends State<ChatsScreen>
           return;
         }
       }
-      
+
       // Not found in either collection
       setState(() {
         _isLoading = false;
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Chat room not found with that ID'),
@@ -509,7 +533,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       setState(() {
         _isLoading = false;
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
@@ -594,313 +618,346 @@ class _ChatsScreenState extends State<ChatsScreen>
             // Main content
             SafeArea(
               child: _isLoading
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text(
-                          'Loading chats...',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : _hasError
-                  ? Center(
+                  ? const Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.error_outline,
-                            size: 48,
-                            color: Colors.red[300],
-                          ),
-                          const SizedBox(height: 16),
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
                           Text(
-                            _errorMessage ?? 'Error loading chats',
+                            'Loading chats...',
                             style: TextStyle(
-                              color: Colors.red[300],
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            onPressed: _loadChatRoomsWithRetry,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Retry'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(context).primaryColor,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
+                              color: Colors.white70,
+                              fontSize: 14,
                             ),
                           ),
                         ],
                       ),
                     )
-                  : CustomScrollView(
-                        slivers: [
-                          // Only show the neon app bar if not searching
-                          if (!_isSearching)
-                            SliverAppBar(
-                              floating: true,
-                              backgroundColor: Colors.transparent,
-                              elevation: 0,
-                              title: AnimatedBuilder(
-                                animation: _pulseController,
-                                builder: (context, child) {
-                                  return Text(
-                                    'JEFFREYS BAY CHAT ROOMS',
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      letterSpacing: 2.0,
-                                      shadows: [
-                                        Shadow(
-                                          color: AppColors.primaryBlue
-                                              .withOpacity(
-                                                0.7 * _pulseAnimation.value,
-                                              ),
-                                          blurRadius: 10 * _pulseAnimation.value,
-                                        ),
-                                        Shadow(
-                                          color: AppColors.primaryPurple
-                                              .withOpacity(
-                                                0.5 * _pulseAnimation.value,
-                                              ),
-                                          blurRadius: 15 * _pulseAnimation.value,
-                                          offset: const Offset(2, 1),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
+                  : _hasError
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                size: 48,
+                                color: Colors.red[300],
                               ),
-                              leading: IconButton(
-                                icon: const Icon(Icons.arrow_back),
-                                onPressed: () => Navigator.pop(context),
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage ?? 'Error loading chats',
+                                style: TextStyle(
+                                  color: Colors.red[300],
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
                               ),
-                              actions: [
-                                _buildNeonIconButton(Icons.search, onTap: _toggleSearch),
-                                _buildNeonIconButton(Icons.add, onTap: () => _showCreateRoomDialog(context)),
-                              ],
-                            ),
-
-                          // Show search results count when searching
-                          if (_isSearching && _searchQuery.isNotEmpty)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  'Found ${_filteredAreaChatRooms.length + _filteredPrivateChatRooms.length} results for "$_searchQuery"',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 14,
+                              const SizedBox(height: 8),
+                              ElevatedButton.icon(
+                                onPressed: _loadChatRoomsWithRetry,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Retry'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      Theme.of(context).primaryColor,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
                                   ),
                                 ),
                               ),
-                            ),
-
-                          // Search hint when search is active but empty
-                          if (_isSearching && _searchQuery.isEmpty)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Search Tips:',
+                            ],
+                          ),
+                        )
+                      : CustomScrollView(
+                          slivers: [
+                            // Only show the neon app bar if not searching
+                            if (!_isSearching)
+                              SliverAppBar(
+                                floating: true,
+                                backgroundColor: Colors.transparent,
+                                elevation: 0,
+                                title: AnimatedBuilder(
+                                  animation: _pulseController,
+                                  builder: (context, child) {
+                                    return Text(
+                                      'JEFFREYS BAY CHAT ROOMS',
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        fontSize: 22,
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 14,
+                                        color: Colors.white,
+                                        letterSpacing: 2.0,
+                                        shadows: [
+                                          Shadow(
+                                            color: AppColors.primaryBlue
+                                                .withOpacity(
+                                              0.7 * _pulseAnimation.value,
+                                            ),
+                                            blurRadius:
+                                                10 * _pulseAnimation.value,
+                                          ),
+                                          Shadow(
+                                            color: AppColors.primaryPurple
+                                                .withOpacity(
+                                              0.5 * _pulseAnimation.value,
+                                            ),
+                                            blurRadius:
+                                                15 * _pulseAnimation.value,
+                                            offset: const Offset(2, 1),
+                                          ),
+                                        ],
                                       ),
+                                    );
+                                  },
+                                ),
+                                leading: IconButton(
+                                  icon: const Icon(Icons.arrow_back),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                                actions: [
+                                  _buildNeonIconButton(Icons.search,
+                                      onTap: _toggleSearch),
+                                  _buildNeonIconButton(Icons.add,
+                                      onTap: () =>
+                                          _showCreateRoomDialog(context)),
+                                ],
+                              ),
+
+                            // Show search results count when searching
+                            if (_isSearching && _searchQuery.isNotEmpty)
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Text(
+                                    'Found ${_filteredAreaChatRooms.length + _filteredPrivateChatRooms.length} results for "$_searchQuery"',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '• Enter room name or keywords\n'
-                                      '• Search by area name\n'
-                                      '• Paste a room ID to find a specific room',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
 
-                          // Section header for Area Chat Rooms - only show if there are results or not searching
-                          if (_filteredAreaChatRooms.isNotEmpty || _searchQuery.isEmpty)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                                child: Text(
-                                  'AREA CHAT ROOMS',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 1.2,
-                                    shadows: [
-                                      Shadow(
-                                        color: AppColors.primaryBlue.withOpacity(
-                                          0.7,
+                            // Search hint when search is active but empty
+                            if (_isSearching && _searchQuery.isEmpty)
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Search Tips:',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
                                         ),
-                                        blurRadius: 8,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '• Enter room name or keywords\n'
+                                        '• Search by area name\n'
+                                        '• Paste a room ID to find a specific room',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 14,
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
                               ),
-                            ),
 
-                          // Area Chat Rooms Grid - use filtered rooms
-                          if (_filteredAreaChatRooms.isNotEmpty || (_searchQuery.isEmpty && !_isSearching))
-                            SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                              sliver: SliverGrid(
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      childAspectRatio: 0.85,
-                                      crossAxisSpacing: 16,
-                                      mainAxisSpacing: 16,
+                            // Section header for Area Chat Rooms - only show if there are results or not searching
+                            if (_filteredAreaChatRooms.isNotEmpty ||
+                                _searchQuery.isEmpty)
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                                  child: Text(
+                                    'AREA CHAT ROOMS',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 1.2,
+                                      shadows: [
+                                        Shadow(
+                                          color:
+                                              AppColors.primaryBlue.withOpacity(
+                                            0.7,
+                                          ),
+                                          blurRadius: 8,
+                                        ),
+                                      ],
                                     ),
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) {
-                                    // Only show create new room tile when not searching
-                                    if (!_isSearching && index >= _filteredAreaChatRooms.length) {
-                                      return _buildCreateNewRoomTile();
-                                    }
-                                    
-                                    if (index >= _filteredAreaChatRooms.length) {
+                                  ),
+                                ),
+                              ),
+
+                            // Area Chat Rooms Grid - use filtered rooms
+                            if (_filteredAreaChatRooms.isNotEmpty ||
+                                (_searchQuery.isEmpty && !_isSearching))
+                              SliverPadding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 0.85,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                  ),
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) {
+                                      // Only show create new room tile when not searching
+                                      if (!_isSearching &&
+                                          index >=
+                                              _filteredAreaChatRooms.length) {
+                                        return _buildCreateNewRoomTile();
+                                      }
+
+                                      if (index >=
+                                          _filteredAreaChatRooms.length) {
+                                        return null;
+                                      }
+
+                                      final room =
+                                          _filteredAreaChatRooms[index];
+                                      final color = _getRoomColor(room.name);
+
+                                      return _buildRoomTileFromRoom(
+                                        index,
+                                        room,
+                                        color,
+                                      );
+                                    },
+                                    childCount: _isSearching
+                                        ? _filteredAreaChatRooms.length
+                                        : _filteredAreaChatRooms.length +
+                                            1, // +1 for "Create New" tile when not searching
+                                  ),
+                                ),
+                              ),
+
+                            // No results message for area rooms when searching
+                            if (_isSearching &&
+                                _searchQuery.isNotEmpty &&
+                                _filteredAreaChatRooms.isEmpty &&
+                                _filteredPrivateChatRooms.isEmpty)
+                              SliverToBoxAdapter(
+                                child: Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(32.0),
+                                    child: Column(
+                                      children: [
+                                        Icon(
+                                          Icons.search_off,
+                                          size: 48,
+                                          color: Colors.white.withOpacity(0.5),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'No chat rooms found matching "$_searchQuery"',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color:
+                                                Colors.white.withOpacity(0.7),
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        TextButton.icon(
+                                          icon: Icon(Icons.add, size: 16),
+                                          label:
+                                              Text('Create a new room instead'),
+                                          onPressed: () {
+                                            _toggleSearch();
+                                            _showCreateRoomDialog(context);
+                                          },
+                                          style: TextButton.styleFrom(
+                                            foregroundColor:
+                                                AppColors.primaryBlue,
+                                          ),
+                                        )
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                            // Section header for Private Chat Rooms - only show if there are results or not searching
+                            if (_filteredPrivateChatRooms.isNotEmpty ||
+                                (_searchQuery.isEmpty && !_isSearching))
+                              SliverToBoxAdapter(
+                                key: _privateRoomsKey,
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                                  child: Text(
+                                    'PRIVATE CHAT ROOMS',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 1.2,
+                                      shadows: [
+                                        Shadow(
+                                          color: AppColors.primaryPurple
+                                              .withOpacity(0.7),
+                                          blurRadius: 8,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                            // Private Chat Rooms Grid - use filtered rooms
+                            if (_filteredPrivateChatRooms.isNotEmpty ||
+                                (_searchQuery.isEmpty && !_isSearching))
+                              SliverPadding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 0.85,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                  ),
+                                  delegate: SliverChildBuilderDelegate((
+                                    context,
+                                    index,
+                                  ) {
+                                    if (index >=
+                                        _filteredPrivateChatRooms.length) {
                                       return null;
                                     }
 
-                                    final room = _filteredAreaChatRooms[index];
+                                    final room =
+                                        _filteredPrivateChatRooms[index];
                                     final color = _getRoomColor(room.name);
 
                                     return _buildRoomTileFromRoom(
-                                      index,
+                                      index + _filteredAreaChatRooms.length,
                                       room,
                                       color,
                                     );
                                   },
-                                  childCount:
-                                      _isSearching ? _filteredAreaChatRooms.length : _filteredAreaChatRooms.length + 1, // +1 for "Create New" tile when not searching
+                                      childCount:
+                                          _filteredPrivateChatRooms.length),
                                 ),
                               ),
-                            ),
-                            
-                          // No results message for area rooms when searching
-                          if (_isSearching && _searchQuery.isNotEmpty && _filteredAreaChatRooms.isEmpty && _filteredPrivateChatRooms.isEmpty)
-                            SliverToBoxAdapter(
-                              child: Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(32.0),
-                                  child: Column(
-                                    children: [
-                                      Icon(
-                                        Icons.search_off,
-                                        size: 48,
-                                        color: Colors.white.withOpacity(0.5),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        'No chat rooms found matching "$_searchQuery"',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.7),
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      TextButton.icon(
-                                        icon: Icon(Icons.add, size: 16),
-                                        label: Text('Create a new room instead'),
-                                        onPressed: () {
-                                          _toggleSearch();
-                                          _showCreateRoomDialog(context);
-                                        },
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: AppColors.primaryBlue,
-                                        ),
-                                      )
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                          // Section header for Private Chat Rooms - only show if there are results or not searching
-                          if (_filteredPrivateChatRooms.isNotEmpty || (_searchQuery.isEmpty && !_isSearching))
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                                child: Text(
-                                  'PRIVATE CHAT ROOMS',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 1.2,
-                                    shadows: [
-                                      Shadow(
-                                        color: AppColors.primaryPurple
-                                            .withOpacity(0.7),
-                                        blurRadius: 8,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                          // Private Chat Rooms Grid - use filtered rooms
-                          if (_filteredPrivateChatRooms.isNotEmpty || (_searchQuery.isEmpty && !_isSearching))
-                            SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                              sliver: SliverGrid(
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      childAspectRatio: 0.85,
-                                      crossAxisSpacing: 16,
-                                      mainAxisSpacing: 16,
-                                    ),
-                                delegate: SliverChildBuilderDelegate((
-                                  context,
-                                  index,
-                                ) {
-                                  if (index >= _filteredPrivateChatRooms.length) {
-                                    return null;
-                                  }
-
-                                  final room = _filteredPrivateChatRooms[index];
-                                  final color = _getRoomColor(room.name);
-
-                                  return _buildRoomTileFromRoom(
-                                    index + _filteredAreaChatRooms.length,
-                                    room,
-                                    color,
-                                  );
-                                }, childCount: _filteredPrivateChatRooms.length),
-                              ),
-                            ),
-                        ],
-                      ),
+                          ],
+                        ),
             ),
           ],
         ),
@@ -1013,10 +1070,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                               height: 12,
                               width: 12,
                               decoration: BoxDecoration(
-                                color:
-                                    hasUnreadMessages
-                                        ? AppColors.primaryGreen
-                                        : accentColor,
+                                color: hasUnreadMessages
+                                    ? AppColors.primaryGreen
+                                    : accentColor,
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
@@ -1130,45 +1186,46 @@ class _ChatsScreenState extends State<ChatsScreen>
                             // Time or unread count
                             hasUnreadMessages && unreadCount > 0
                                 ? Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primaryGreen,
-                                    borderRadius: BorderRadius.circular(10),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.primaryGreen.withOpacity(
-                                          0.5,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryGreen,
+                                      borderRadius: BorderRadius.circular(10),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.primaryGreen
+                                              .withOpacity(
+                                            0.5,
+                                          ),
+                                          blurRadius: 5,
+                                          spreadRadius: 0,
                                         ),
-                                        blurRadius: 5,
-                                        spreadRadius: 0,
+                                      ],
+                                    ),
+                                    child: Text(
+                                      unreadCount.toString(),
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
                                       ),
-                                    ],
-                                  ),
-                                  child: Text(
-                                    unreadCount.toString(),
-                                    style: const TextStyle(
+                                    ),
+                                  )
+                                : Text(
+                                    _getTimeText(lastActivity),
+                                    style: TextStyle(
                                       fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                                      color: Colors.grey.shade400,
                                     ),
                                   ),
-                                )
-                                : Text(
-                                  _getTimeText(lastActivity),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                ),
                           ],
                         ),
                       ],
                     ),
                   ),
-                  
+
                   // Share button (top-right)
                   Positioned(
                     top: 0,
@@ -1186,7 +1243,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                           ),
                           tooltip: 'Share Room ID',
                           splashRadius: 20,
-                          onPressed: () => _showShareRoomIdDialog(context, roomName, roomId),
+                          onPressed: () =>
+                              _showShareRoomIdDialog(context, roomName, roomId),
                         ),
                       ),
                     ),
@@ -1358,178 +1416,176 @@ class _ChatsScreenState extends State<ChatsScreen>
 
     showDialog(
       context: context,
-      builder:
-          (context) => StatefulBuilder(
-            builder:
-                (context, setState) => AlertDialog(
-                  backgroundColor: const Color(0xFF1A1A2E),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: const BorderSide(
-                      color: AppColors.primaryBlue,
-                      width: 1,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A2E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(
+              color: AppColors.primaryBlue,
+              width: 1,
+            ),
+          ),
+          title: const Text(
+            'Create New Chat Room',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: roomNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Room Name',
+                    labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white30),
                     ),
                   ),
-                  title: const Text(
-                    'Create New Chat Room',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Description (Optional)',
+                    labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white30),
                     ),
                   ),
-                  content: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextField(
-                          controller: roomNameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Room Name',
-                            labelStyle: TextStyle(color: Colors.white70),
-                            enabledBorder: UnderlineInputBorder(
-                              borderSide: BorderSide(color: Colors.white30),
-                            ),
-                          ),
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: descriptionController,
-                          decoration: const InputDecoration(
-                            labelText: 'Description (Optional)',
-                            labelStyle: TextStyle(color: Colors.white70),
-                            enabledBorder: UnderlineInputBorder(
-                              borderSide: BorderSide(color: Colors.white30),
-                            ),
-                          ),
-                          style: const TextStyle(color: Colors.white),
-                          maxLines: 2,
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            const Text(
-                              'Public Room: ',
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                            Switch(
-                              value: isPublic,
-                              onChanged: (value) {
-                                setState(() {
-                                  isPublic = value;
-                                });
-                              },
-                              activeColor: AppColors.primaryBlue,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Note: Creating a room costs 100 tokens',
-                          style: TextStyle(color: Colors.orange, fontSize: 12),
-                        ),
-                      ],
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text(
+                      'Public Room: ',
+                      style: TextStyle(color: Colors.white70),
                     ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white70,
-                      ),
-                      child: const Text('CANCEL'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final roomName = roomNameController.text.trim();
-                        if (roomName.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Room name cannot be empty'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
-
-                        // Check if user has enough tokens
-                        try {
-                          final tokenBalance =
-                              await chatService.getUserTokenBalance();
-
-                          if (tokenBalance < ChatRoom.createRoomTokenCost) {
-                            if (context.mounted) {
-                              Navigator.pop(context);
-                              NotEnoughTokensDialog.show(
-                                context: context,
-                                requiredTokens: ChatRoom.createRoomTokenCost,
-                                currentTokens: tokenBalance,
-                                onBuyTokens: () {
-                                  // Handle token purchase
-                                },
-                              );
-                            }
-                            return;
-                          }
-
-                          // Create new room
-                          final roomId = await chatService.createChatRoom(
-                            name: roomName,
-                            memberIds: [chatService.currentUserId!],
-                            isPublic: isPublic,
-                            isDirectMessage: false, // This creates a regular chat room (public or private), not a direct message
-                          );
-
-                          if (roomId != null && context.mounted) {
-                            Navigator.pop(context);
-
-                            // Manually add new room to local state for immediate UI update
-                            _addNewRoomToLocalState(
-                              roomId,
-                              roomName,
-                              descriptionController.text.trim(),
-                              isPublic,
-                            );
-
-                            // Show success dialog
-                            _showRoomCreatedDialog(context, roomName, roomId);
-
-                            // Also refresh rooms from the server
-                            if (mounted) {
-                              _loadChatRooms();
-                            }
-                          } else if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Failed to create chat room'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Error: ${e.toString().split(': ').last}',
-                                ),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
+                    Switch(
+                      value: isPublic,
+                      onChanged: (value) {
+                        setState(() {
+                          isPublic = value;
+                        });
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryBlue,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text('CREATE'),
+                      activeColor: AppColors.primaryBlue,
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Note: Creating a room costs 100 tokens',
+                  style: TextStyle(color: Colors.orange, fontSize: 12),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white70,
+              ),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final roomName = roomNameController.text.trim();
+                if (roomName.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Room name cannot be empty'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                // Check if user has enough tokens
+                try {
+                  final tokenBalance = await chatService.getUserTokenBalance();
+
+                  if (tokenBalance < ChatRoom.createRoomTokenCost) {
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      NotEnoughTokensDialog.show(
+                        context: context,
+                        requiredTokens: ChatRoom.createRoomTokenCost,
+                        currentTokens: tokenBalance,
+                        onBuyTokens: () {
+                          // Handle token purchase
+                        },
+                      );
+                    }
+                    return;
+                  }
+
+                  // Create new room
+                  final roomId = await chatService.createChatRoom(
+                    name: roomName,
+                    memberIds: [chatService.currentUserId!],
+                    isPublic: isPublic,
+                    isDirectMessage:
+                        false, // This creates a regular chat room (public or private), not a direct message
+                  );
+
+                  if (roomId != null && context.mounted) {
+                    Navigator.pop(context);
+
+                    // Manually add new room to local state for immediate UI update
+                    _addNewRoomToLocalState(
+                      roomId,
+                      roomName,
+                      descriptionController.text.trim(),
+                      isPublic,
+                    );
+
+                    // Show success dialog
+                    _showRoomCreatedDialog(context, roomName, roomId);
+
+                    // Also refresh rooms from the server
+                    if (mounted) {
+                      _loadChatRooms();
+                    }
+                  } else if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to create chat room'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Error: ${e.toString().split(': ').last}',
+                        ),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('CREATE'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1541,116 +1597,115 @@ class _ChatsScreenState extends State<ChatsScreen>
   ) {
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A2E),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: AppColors.primaryGreen, width: 1),
-            ),
-            title: Row(
-              children: [
-                const Icon(Icons.check_circle, color: AppColors.primaryGreen),
-                const SizedBox(width: 8),
-                const Text(
-                  'Success!',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Your chat room "$roomName" has been created successfully!',
-                  style: const TextStyle(color: Colors.white),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Room ID:',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white24),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          roomId,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.copy,
-                          color: Colors.white54,
-                          size: 16,
-                        ),
-                        onPressed: () {
-                          // Copy room ID to clipboard
-                          Clipboard.setData(ClipboardData(text: roomId));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Room ID copied to clipboard'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-                        },
-                        constraints: const BoxConstraints(
-                          minWidth: 24,
-                          minHeight: 24,
-                        ),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // Force refresh the chat rooms list
-                  _loadChatRooms();
-                },
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text('CLOSE'),
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.primaryGreen, width: 1),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: AppColors.primaryGreen),
+            const SizedBox(width: 8),
+            const Text(
+              'Success!',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // Navigate to the chat room
-                  _navigateToChat(context, roomName, roomId);
-                  // Force refresh the chat rooms list when the user comes back
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    if (mounted) _loadChatRooms();
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryGreen,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('OPEN ROOM'),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your chat room "$roomName" has been created successfully!',
+              style: const TextStyle(color: Colors.white),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Room ID:',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white24),
               ),
-            ],
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      roomId,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.copy,
+                      color: Colors.white54,
+                      size: 16,
+                    ),
+                    onPressed: () {
+                      // Copy room ID to clipboard
+                      Clipboard.setData(ClipboardData(text: roomId));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Room ID copied to clipboard'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    },
+                    constraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 24,
+                    ),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Force refresh the chat rooms list
+              _loadChatRooms();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            child: const Text('CLOSE'),
           ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Navigate to the chat room
+              _navigateToChat(context, roomName, roomId);
+              // Force refresh the chat rooms list when the user comes back
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (mounted) _loadChatRooms();
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('OPEN ROOM'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1709,7 +1764,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 child: const Icon(Icons.search),
               ),
             ),
-            
+
             // Create Room Button
             Container(
               decoration: BoxDecoration(
@@ -1798,7 +1853,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 cursorColor: AppColors.primaryBlue,
                 enabled: !isLoading,
               ),
-              
+
               // Show loading indicator when processing
               if (isLoading)
                 Container(
@@ -1810,7 +1865,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.primaryBlue),
                         ),
                       ),
                       SizedBox(width: 16),
@@ -1832,105 +1888,112 @@ class _ChatsScreenState extends State<ChatsScreen>
               child: const Text('CANCEL'),
             ),
             ElevatedButton(
-              onPressed: isLoading ? null : () async {
-                final roomId = roomIdController.text.trim();
-                if (roomId.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Room ID cannot be empty'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      final roomId = roomIdController.text.trim();
+                      if (roomId.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Room ID cannot be empty'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
 
-                // Set loading state
-                setState(() {
-                  isLoading = true;
-                });
-
-                // Try joining the room
-                try {
-                  // Check if room exists first
-                  final room = await chatService.getChatRoomStream(roomId).first;
-                  
-                  if (room == null) {
-                    if (context.mounted) {
+                      // Set loading state
                       setState(() {
-                        isLoading = false;
+                        isLoading = true;
                       });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Room does not exist'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                    return;
-                  }
 
-                  // Join the room
-                  final joined = await chatService.joinChatRoom(roomId);
+                      // Try joining the room
+                      try {
+                        // Check if room exists first
+                        final room =
+                            await chatService.getChatRoomStream(roomId).first;
 
-                  if (context.mounted) {
-                    // Close the dialog
-                    Navigator.pop(dialogContext);
+                        if (room == null) {
+                          if (context.mounted) {
+                            setState(() {
+                              isLoading = false;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Room does not exist'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                          return;
+                        }
 
-                    // Convert ChatRoom to AreaChatRoom for UI display
-                    final areaChatRoom = AreaChatRoom(
-                      id: room.id,
-                      name: room.name,
-                      areaName: "Joined Room",
-                      creatorId: room.creatorId ?? '',
-                      createdAt: room.createdAt,
-                      isPublic: room.isPublic,
-                      memberCount: room.memberCount + 1, // Include the user who just joined
-                      memberIds: [...room.memberIds, chatService.currentUserId!],
-                      location: const GeoPoint(0, 0),
-                      radius: 0,
-                    );
-                    
-                    // Add to local state immediately
-                    _addRoomToLocalStateAfterJoining(areaChatRoom);
+                        // Join the room
+                        final joined = await chatService.joinChatRoom(roomId);
 
-                    // Show success message
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Successfully joined ${room.name}'),
-                        backgroundColor: Colors.green,
-                        duration: const Duration(seconds: 2),
-                        action: SnackBarAction(
-                          label: 'OPEN',
-                          textColor: Colors.white,
-                          onPressed: () {
-                            // Navigate to the chat room
-                            _navigateToChat(context, room.name, roomId);
-                          },
-                        ),
-                      ),
-                    );
+                        if (context.mounted) {
+                          // Close the dialog
+                          Navigator.pop(dialogContext);
 
-                    // Refresh rooms
-                    if (mounted) {
-                      _loadChatRooms();
-                    }
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    setState(() {
-                      isLoading = false;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Error: ${e.toString().split(': ').last}',
-                        ),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
+                          // Convert ChatRoom to AreaChatRoom for UI display
+                          final areaChatRoom = AreaChatRoom(
+                            id: room.id,
+                            name: room.name,
+                            areaName: "Joined Room",
+                            creatorId: room.creatorId ?? '',
+                            createdAt: room.createdAt,
+                            isPublic: room.isPublic,
+                            memberCount: room.memberCount +
+                                1, // Include the user who just joined
+                            memberIds: [
+                              ...room.memberIds,
+                              chatService.currentUserId!
+                            ],
+                            location: const GeoPoint(0, 0),
+                            radius: 0,
+                          );
+
+                          // Add to local state immediately
+                          _addRoomToLocalStateAfterJoining(areaChatRoom);
+
+                          // Show success message
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Successfully joined ${room.name}'),
+                              backgroundColor: Colors.green,
+                              duration: const Duration(seconds: 2),
+                              action: SnackBarAction(
+                                label: 'OPEN',
+                                textColor: Colors.white,
+                                onPressed: () {
+                                  // Navigate to the chat room
+                                  _navigateToChat(context, room.name, roomId);
+                                },
+                              ),
+                            ),
+                          );
+
+                          // Refresh rooms
+                          if (mounted) {
+                            _loadChatRooms();
+                          }
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          setState(() {
+                            isLoading = false;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Error: ${e.toString().split(': ').last}',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryBlue,
                 foregroundColor: Colors.white,
@@ -1953,11 +2016,11 @@ class _ChatsScreenState extends State<ChatsScreen>
     // Check if room already exists in local state to avoid duplicates
     final isAreaRoomExists = _areaChatRooms.any((r) => r.id == roomId);
     final isPrivateRoomExists = _privateChatRooms.any((r) => r.id == roomId);
-    
+
     if (isAreaRoomExists || isPrivateRoomExists) {
       return; // Skip if already in the list
     }
-    
+
     setState(() {
       if (isPublic) {
         _areaChatRooms = [
@@ -2001,11 +2064,11 @@ class _ChatsScreenState extends State<ChatsScreen>
     // Check if the room is already in the list to avoid duplicates
     final isAreaRoomExists = _areaChatRooms.any((r) => r.id == room.id);
     final isPrivateRoomExists = _privateChatRooms.any((r) => r.id == room.id);
-    
+
     if (isAreaRoomExists || isPrivateRoomExists) {
       return; // Skip if already in the list
     }
-    
+
     setState(() {
       if (room.isPublic) {
         _areaChatRooms = [
@@ -2022,7 +2085,8 @@ class _ChatsScreenState extends State<ChatsScreen>
   }
 
   // Show a dialog to share room ID
-  void _showShareRoomIdDialog(BuildContext context, String roomName, String roomId) {
+  void _showShareRoomIdDialog(
+      BuildContext context, String roomName, String roomId) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2099,7 +2163,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primaryPurple,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                           textStyle: const TextStyle(fontSize: 12),
                         ),
                       ),
@@ -2141,7 +2206,7 @@ class _ChatsScreenState extends State<ChatsScreen>
 
   void _showFindRoomDialog() {
     final TextEditingController roomIdController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2238,7 +2303,8 @@ class _ChatsScreenState extends State<ChatsScreen>
             children: [
               Icon(
                 Icons.search,
-                color: isPublic ? AppColors.primaryBlue : AppColors.primaryPurple,
+                color:
+                    isPublic ? AppColors.primaryBlue : AppColors.primaryPurple,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -2272,18 +2338,18 @@ class _ChatsScreenState extends State<ChatsScreen>
               _buildInfoRow('Type:', isAreaRoom ? 'Area Room' : 'Chat Room'),
               _buildInfoRow('Visibility:', isPublic ? 'Public' : 'Private'),
               _buildInfoRow('ID:', roomId, isMonospace: true),
-              
+
               const SizedBox(height: 16),
               Text(
-                isPublic 
-                  ? 'This is a public room. You can join to start chatting!' 
-                  : 'This is a private room. You need an invitation to join.',
+                isPublic
+                    ? 'This is a public room. You can join to start chatting!'
+                    : 'This is a private room. You need an invitation to join.',
                 style: TextStyle(
                   color: isPublic ? Colors.green.shade300 : Colors.orange,
                   fontSize: 13,
                 ),
               ),
-              
+
               // Show loading indicator when joining
               if (isJoining)
                 Container(
@@ -2296,7 +2362,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            isPublic ? AppColors.primaryBlue : AppColors.primaryPurple,
+                            isPublic
+                                ? AppColors.primaryBlue
+                                : AppColors.primaryPurple,
                           ),
                         ),
                       ),
@@ -2336,12 +2404,13 @@ class _ChatsScreenState extends State<ChatsScreen>
 
                             // Create a room object for UI
                             AreaChatRoom room;
-                            
+
                             if (isAreaRoom) {
                               // Get the full room details
-                              final fullRoom = await _locationService.getAreaChatRoomById(roomId);
+                              final fullRoom = await _locationService
+                                  .getAreaChatRoomById(roomId);
                               if (fullRoom == null) return;
-                              
+
                               // Create a new instance with the current user added
                               room = AreaChatRoom(
                                 id: fullRoom.id,
@@ -2350,7 +2419,10 @@ class _ChatsScreenState extends State<ChatsScreen>
                                 description: fullRoom.description,
                                 location: fullRoom.location,
                                 radius: fullRoom.radius,
-                                memberIds: [...fullRoom.memberIds, chatService.currentUserId!],
+                                memberIds: [
+                                  ...fullRoom.memberIds,
+                                  chatService.currentUserId!
+                                ],
                                 memberCount: fullRoom.memberCount + 1,
                                 isPublic: fullRoom.isPublic,
                                 creatorId: fullRoom.creatorId,
@@ -2359,15 +2431,19 @@ class _ChatsScreenState extends State<ChatsScreen>
                               );
                             } else {
                               // Get the full room details
-                              final fullRoom = await chatService.getChatRoomById(roomId);
+                              final fullRoom =
+                                  await chatService.getChatRoomById(roomId);
                               if (fullRoom == null) return;
-                              
+
                               // Create AreaChatRoom from a regular ChatRoom
                               room = AreaChatRoom(
                                 id: fullRoom.id,
                                 name: fullRoom.name,
                                 areaName: 'Joined Room',
-                                memberIds: [...fullRoom.memberIds, chatService.currentUserId!],
+                                memberIds: [
+                                  ...fullRoom.memberIds,
+                                  chatService.currentUserId!
+                                ],
                                 memberCount: fullRoom.memberCount + 1,
                                 isPublic: fullRoom.isPublic,
                                 creatorId: fullRoom.creatorId,
@@ -2385,13 +2461,15 @@ class _ChatsScreenState extends State<ChatsScreen>
                             // Show success message with option to navigate
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Successfully joined "$roomName"'),
+                                content:
+                                    Text('Successfully joined "$roomName"'),
                                 backgroundColor: Colors.green,
                                 duration: const Duration(seconds: 2),
                                 action: SnackBarAction(
                                   label: 'OPEN',
                                   textColor: Colors.white,
-                                  onPressed: () => _navigateToChat(context, roomName, roomId),
+                                  onPressed: () => _navigateToChat(
+                                      context, roomName, roomId),
                                 ),
                               ),
                             );
@@ -2401,7 +2479,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                             Navigator.pop(dialogContext);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Error joining room: ${e.toString().split(': ').last}'),
+                                content: Text(
+                                    'Error joining room: ${e.toString().split(': ').last}'),
                                 backgroundColor: Colors.red,
                               ),
                             );
@@ -2411,7 +2490,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: AppColors.primaryBlue.withOpacity(0.4),
+                  disabledBackgroundColor:
+                      AppColors.primaryBlue.withOpacity(0.4),
                 ),
                 child: const Text('JOIN ROOM'),
               ),
@@ -2420,7 +2500,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       ),
     );
   }
-  
+
   // Helper method to build info rows in the found room dialog
   Widget _buildInfoRow(String label, String value, {bool isMonospace = false}) {
     return Padding(
@@ -2454,16 +2534,35 @@ class _ChatsScreenState extends State<ChatsScreen>
       ),
     );
   }
+
+  void _scrollToPrivateRooms() {
+    // Wait for the UI to be built, then scroll to private rooms section
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _privateRoomsKey.currentContext != null) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            final context = _privateRoomsKey.currentContext;
+            if (context != null) {
+              Scrollable.ensureVisible(
+                context,
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeInOut,
+              );
+            }
+          }
+        });
+      }
+    });
+  }
 }
 
 // Grid painter for background effect
 class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = Colors.blue.withOpacity(0.1)
-          ..strokeWidth = 0.5;
+    final paint = Paint()
+      ..color = Colors.blue.withOpacity(0.1)
+      ..strokeWidth = 0.5;
 
     // Horizontal lines
     final horizontalCount = 15;

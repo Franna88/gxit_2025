@@ -30,22 +30,22 @@ class PopupChatRoom extends ChatRoom {
   static const int defaultChatDurationMinutes = 60;
 
   PopupChatRoom({
-    required String id,
-    required String name,
-    required List<String> memberIds,
-    String? lastMessage,
-    String? lastSenderId,
-    DateTime? lastActivity,
-    int memberCount = 0,
-    bool isPublic = true,
-    String? creatorId,
-    DateTime? createdAt,
-    bool isClosed = false,
-    DateTime? closedAt,
-    DateTime? expiresAt,
-    String? closedBy,
-    bool isDirectMessage = false,
-    List<String>? participantIds,
+    required super.id,
+    required super.name,
+    required super.memberIds,
+    super.lastMessage,
+    super.lastSenderId,
+    super.lastActivity,
+    super.memberCount,
+    super.isPublic,
+    super.creatorId,
+    super.createdAt,
+    super.isClosed,
+    super.closedAt,
+    super.expiresAt,
+    super.closedBy,
+    super.isDirectMessage,
+    super.participantIds,
     required this.scheduledTime,
     this.openWaitingRoomTime,
     this.startTime,
@@ -58,24 +58,7 @@ class PopupChatRoom extends ChatRoom {
     required this.description,
     this.imageUrl,
     required this.category,
-  }) : super(
-         id: id,
-         name: name,
-         memberIds: memberIds,
-         lastMessage: lastMessage,
-         lastSenderId: lastSenderId,
-         lastActivity: lastActivity,
-         memberCount: memberCount,
-         isPublic: isPublic,
-         creatorId: creatorId,
-         createdAt: createdAt,
-         isClosed: isClosed,
-         closedAt: closedAt,
-         expiresAt: expiresAt,
-         closedBy: closedBy,
-         isDirectMessage: isDirectMessage,
-         participantIds: participantIds,
-       );
+  });
 
   // Create from Firestore document
   factory PopupChatRoom.fromFirestore(DocumentSnapshot doc) {
@@ -101,7 +84,9 @@ class PopupChatRoom extends ChatRoom {
       expiresAt: (data['expiresAt'] as Timestamp?)?.toDate(),
       closedBy: data['closedBy'],
       isDirectMessage: data['isDirectMessage'] ?? false,
-      participantIds: data['participantIds'] != null ? List<String>.from(data['participantIds']) : null,
+      participantIds: data['participantIds'] != null
+          ? List<String>.from(data['participantIds'])
+          : null,
       scheduledTime: (data['scheduledTime'] as Timestamp).toDate(),
       openWaitingRoomTime:
           (data['openWaitingRoomTime'] as Timestamp?)?.toDate(),
@@ -156,10 +141,9 @@ class PopupChatRoom extends ChatRoom {
     return {
       ...baseMap,
       'scheduledTime': Timestamp.fromDate(scheduledTime),
-      'openWaitingRoomTime':
-          openWaitingRoomTime != null
-              ? Timestamp.fromDate(openWaitingRoomTime!)
-              : null,
+      'openWaitingRoomTime': openWaitingRoomTime != null
+          ? Timestamp.fromDate(openWaitingRoomTime!)
+          : null,
       'startTime': startTime != null ? Timestamp.fromDate(startTime!) : null,
       'endTime': endTime != null ? Timestamp.fromDate(endTime!) : null,
       'maxCapacity': maxCapacity,

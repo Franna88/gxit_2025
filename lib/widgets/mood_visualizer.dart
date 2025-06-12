@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import '../models/user_mood.dart';
 import 'package:lottie/lottie.dart';
 
@@ -81,26 +80,17 @@ class _MoodVisualizerState extends State<MoodVisualizer>
     return GestureDetector(
       onTap: widget.onTap,
       child: MouseRegion(
-        onEnter:
-            (_) =>
-                widget.interactive ? setState(() => _isHovered = true) : null,
-        onExit:
-            (_) =>
-                widget.interactive ? setState(() => _isHovered = false) : null,
+        onEnter: (_) =>
+            widget.interactive ? setState(() => _isHovered = true) : null,
+        onExit: (_) =>
+            widget.interactive ? setState(() => _isHovered = false) : null,
         child: GestureDetector(
-          onTapDown:
-              (_) =>
-                  widget.interactive ? setState(() => _isPressed = true) : null,
-          onTapUp:
-              (_) =>
-                  widget.interactive
-                      ? setState(() => _isPressed = false)
-                      : null,
-          onTapCancel:
-              () =>
-                  widget.interactive
-                      ? setState(() => _isPressed = false)
-                      : null,
+          onTapDown: (_) =>
+              widget.interactive ? setState(() => _isPressed = true) : null,
+          onTapUp: (_) =>
+              widget.interactive ? setState(() => _isPressed = false) : null,
+          onTapCancel: () =>
+              widget.interactive ? setState(() => _isPressed = false) : null,
           child: SizedBox(
             width: widget.size * 1.2,
             height: widget.size * 1.4, // Increased to accommodate label
@@ -114,18 +104,16 @@ class _MoodVisualizerState extends State<MoodVisualizer>
                   child: AnimatedBuilder(
                     animation: _pulseController,
                     builder: (context, child) {
-                      final pulseScale =
-                          widget.showPulse
-                              ? 1.0 +
-                                  ((widget.mood.intensityValue * 0.1) *
-                                      _pulseAnimation.value)
-                              : 1.0;
+                      final pulseScale = widget.showPulse
+                          ? 1.0 +
+                              ((widget.mood.intensityValue * 0.1) *
+                                  _pulseAnimation.value)
+                          : 1.0;
 
                       return Transform.scale(
-                        scale:
-                            _isPressed
-                                ? 0.95
-                                : (_isHovered ? 1.05 : pulseScale),
+                        scale: _isPressed
+                            ? 0.95
+                            : (_isHovered ? 1.05 : pulseScale),
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
@@ -142,8 +130,7 @@ class _MoodVisualizerState extends State<MoodVisualizer>
                                     ),
                                     blurRadius:
                                         widget.size / 3 * _pulseAnimation.value,
-                                    spreadRadius:
-                                        widget.size /
+                                    spreadRadius: widget.size /
                                         10 *
                                         _pulseAnimation.value,
                                   ),
@@ -187,10 +174,9 @@ class _MoodVisualizerState extends State<MoodVisualizer>
                             // Intensity indicator at the bottom
                             Positioned(
                               bottom: 4,
-                              child:
-                                  widget.size >= 40
-                                      ? _buildIntensityIndicator()
-                                      : const SizedBox(),
+                              child: widget.size >= 40
+                                  ? _buildIntensityIndicator()
+                                  : const SizedBox(),
                             ),
                           ],
                         ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../constants.dart';
-import 'home_screen.dart';
 import 'preferences_screen.dart';
 import '../services/user_service.dart';
 
@@ -265,7 +264,8 @@ class _SelfDescriptionScreenState extends State<SelfDescriptionScreen>
                         runSpacing: 15,
                         alignment: WrapAlignment.center,
                         children: _descriptiveOptions.map((option) {
-                          final isSelected = _selectedDescriptions.contains(option);
+                          final isSelected =
+                              _selectedDescriptions.contains(option);
                           return GestureDetector(
                             onTap: () {
                               setState(() {
@@ -314,8 +314,9 @@ class _SelfDescriptionScreenState extends State<SelfDescriptionScreen>
                                       color: isSelected
                                           ? Colors.white
                                           : AppColors.subtleText,
-                                      fontWeight:
-                                          isSelected ? FontWeight.bold : FontWeight.w500,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w500,
                                     ),
                                   ),
                                   if (isSelected) ...[
@@ -334,7 +335,7 @@ class _SelfDescriptionScreenState extends State<SelfDescriptionScreen>
                       ),
 
                       const SizedBox(height: 20),
-                      
+
                       // Selected count
                       Text(
                         "${_selectedDescriptions.length} selected",
@@ -368,7 +369,8 @@ class _SelfDescriptionScreenState extends State<SelfDescriptionScreen>
                                   : LinearGradient(
                                       colors: [
                                         AppColors.primaryBlue.withOpacity(0.8),
-                                        AppColors.primaryPurple.withOpacity(0.8),
+                                        AppColors.primaryPurple
+                                            .withOpacity(0.8),
                                       ],
                                     ),
                               borderRadius: BorderRadius.circular(12),
@@ -448,17 +450,17 @@ class GridPainter extends CustomPainter {
 
     // Horizontal lines
     for (var i = 0; i < size.height; i += 30) {
-      canvas.drawLine(Offset(0, i.toDouble()),
-          Offset(size.width, i.toDouble()), paint);
+      canvas.drawLine(
+          Offset(0, i.toDouble()), Offset(size.width, i.toDouble()), paint);
     }
 
     // Vertical lines
     for (var i = 0; i < size.width; i += 30) {
-      canvas.drawLine(Offset(i.toDouble(), 0),
-          Offset(i.toDouble(), size.height), paint);
+      canvas.drawLine(
+          Offset(i.toDouble(), 0), Offset(i.toDouble(), size.height), paint);
     }
   }
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;
-} 
+}

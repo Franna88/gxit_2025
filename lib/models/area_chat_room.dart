@@ -11,38 +11,25 @@ class AreaChatRoom extends ChatRoom {
   final bool isOfficial; // Indicates if this is an app-generated room
 
   AreaChatRoom({
-    required String id,
-    required String name,
-    required List<String> memberIds,
+    required super.id,
+    required super.name,
+    required super.memberIds,
     required this.areaName,
     required this.location,
     required this.radius,
     this.imageUrl,
     this.description,
     this.isOfficial = true,
-    String? lastMessage,
-    String? lastSenderId,
-    DateTime? lastActivity,
-    int memberCount = 0,
-    bool isPublic = true,
-    String? creatorId,
-    DateTime? createdAt,
-    bool isDirectMessage = false,
-    List<String>? participantIds,
-  }) : super(
-         id: id,
-         name: name,
-         memberIds: memberIds,
-         lastMessage: lastMessage,
-         lastSenderId: lastSenderId,
-         lastActivity: lastActivity,
-         memberCount: memberCount,
-         isPublic: isPublic,
-         creatorId: creatorId,
-         createdAt: createdAt,
-         isDirectMessage: isDirectMessage,
-         participantIds: participantIds,
-       );
+    super.lastMessage,
+    super.lastSenderId,
+    super.lastActivity,
+    super.memberCount,
+    super.isPublic,
+    super.creatorId,
+    super.createdAt,
+    super.isDirectMessage,
+    super.participantIds,
+  });
 
   // Create from Firestore document
   factory AreaChatRoom.fromFirestore(DocumentSnapshot doc) {
@@ -56,8 +43,7 @@ class AreaChatRoom extends ChatRoom {
     final chatRoom = ChatRoom.fromFirestore(doc);
 
     // Get GeoPoint from Firestore
-    final geoPoint =
-        data['location'] as GeoPoint? ??
+    final geoPoint = data['location'] as GeoPoint? ??
         const GeoPoint(
           -34.0507,
           24.9307,
@@ -124,8 +110,7 @@ class AreaChatRoom extends ChatRoom {
     const p = 0.017453292519943295; // Math.PI / 180
     const c = 12742; // 2 * Earth radius (6371 km)
 
-    final a =
-        0.5 -
+    final a = 0.5 -
         math.cos((lat2 - lat1) * p) / 2 +
         math.cos(lat1 * p) *
             math.cos(lat2 * p) *

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants.dart';
 import '../services/user_service.dart';
-import 'home_screen.dart';
 import 'self_description_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -374,51 +372,48 @@ class _SignupScreenState extends State<SignupScreen>
                               ),
                               child: Ink(
                                 decoration: BoxDecoration(
-                                  gradient:
-                                      _isLoading
-                                          ? null
-                                          : LinearGradient(
-                                            colors: [
-                                              AppColors.primaryBlue.withOpacity(
-                                                0.8,
-                                              ),
-                                              AppColors.primaryPurple
-                                                  .withOpacity(0.8),
-                                            ],
-                                          ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow:
-                                      _isLoading
-                                          ? null
-                                          : [
-                                            BoxShadow(
-                                              color: AppColors.primaryBlue
-                                                  .withOpacity(0.4),
-                                              blurRadius: 8,
-                                              spreadRadius: 0,
+                                  gradient: _isLoading
+                                      ? null
+                                      : LinearGradient(
+                                          colors: [
+                                            AppColors.primaryBlue.withOpacity(
+                                              0.8,
                                             ),
+                                            AppColors.primaryPurple
+                                                .withOpacity(0.8),
                                           ],
+                                        ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: _isLoading
+                                      ? null
+                                      : [
+                                          BoxShadow(
+                                            color: AppColors.primaryBlue
+                                                .withOpacity(0.4),
+                                            blurRadius: 8,
+                                            spreadRadius: 0,
+                                          ),
+                                        ],
                                 ),
                                 child: Container(
                                   alignment: Alignment.center,
-                                  child:
-                                      _isLoading
-                                          ? SizedBox(
-                                            width: 24,
-                                            height: 24,
-                                            child: CircularProgressIndicator(
-                                              color: AppColors.primaryBlue,
-                                              strokeWidth: 3,
-                                            ),
-                                          )
-                                          : const Text(
-                                            'REGISTER',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 1.5,
-                                            ),
+                                  child: _isLoading
+                                      ? SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            color: AppColors.primaryBlue,
+                                            strokeWidth: 3,
                                           ),
+                                        )
+                                      : const Text(
+                                          'REGISTER',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 1.5,
+                                          ),
+                                        ),
                                 ),
                               ),
                             ),
@@ -497,19 +492,16 @@ class _SignupScreenState extends State<SignupScreen>
             fontWeight: FontWeight.w500,
           ),
           prefixIcon: Icon(prefixIcon, color: AppColors.subtleText, size: 20),
-          suffixIcon:
-              isPassword && toggleObscure != null
-                  ? IconButton(
-                    icon: Icon(
-                      obscurePassword!
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                      color: AppColors.subtleText,
-                      size: 20,
-                    ),
-                    onPressed: toggleObscure,
-                  )
-                  : null,
+          suffixIcon: isPassword && toggleObscure != null
+              ? IconButton(
+                  icon: Icon(
+                    obscurePassword! ? Icons.visibility_off : Icons.visibility,
+                    color: AppColors.subtleText,
+                    size: 20,
+                  ),
+                  onPressed: toggleObscure,
+                )
+              : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
@@ -563,10 +555,9 @@ class Particle {
 class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = Colors.blue.withOpacity(0.1)
-          ..strokeWidth = 0.5;
+    final paint = Paint()
+      ..color = Colors.blue.withOpacity(0.1)
+      ..strokeWidth = 0.5;
 
     // Horizontal lines
     final horizontalCount = 15;
