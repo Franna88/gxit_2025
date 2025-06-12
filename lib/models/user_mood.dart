@@ -24,8 +24,8 @@ class UserMood {
     this.intensity = MoodIntensity.medium,
     this.gradientColors,
     this.animatedIconAsset,
-  }) : type = null,
-       label = name;
+  })  : type = null,
+        label = name;
 
   // Private constructor for factory methods
   UserMood._({
