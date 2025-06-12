@@ -49,8 +49,8 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
 
     if (chatRoom.isDirectMessage && _userId != null) {
       // For direct messages, resolve the other participant's name
-      displayName = await _chatService.resolveDirectMessageDisplayName(
-          chatRoom, _userId!);
+      displayName =
+          await _chatService.resolveDirectMessageDisplayName(chatRoom, _userId);
     } else {
       // For group chats, use the room name as-is
       displayName = chatRoom.name.isNotEmpty ? chatRoom.name : 'Unnamed Chat';
@@ -73,7 +73,7 @@ class _ActiveChatSectionState extends State<ActiveChatSection> {
           // Active Chat List
           StreamBuilder<List<ChatRoom>>(
             key: ValueKey('active_chats_$_userId'),
-            stream: _chatService.getUserChatRoomsStream(_userId!),
+            stream: _chatService.getUserChatRoomsStream(_userId),
             builder: (context, snapshot) {
               // Handle errors
               if (snapshot.hasError) {

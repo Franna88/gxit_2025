@@ -3,7 +3,7 @@ import '../constants.dart';
 import '../services/user_service.dart';
 
 class TokenPurchaseScreen extends StatefulWidget {
-  const TokenPurchaseScreen({Key? key}) : super(key: key);
+  const TokenPurchaseScreen({super.key});
 
   @override
   State<TokenPurchaseScreen> createState() => _TokenPurchaseScreenState();
@@ -233,14 +233,13 @@ class _TokenPurchaseScreenState extends State<TokenPurchaseScreen>
                                 ),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color:
-                                      isSelected
-                                          ? package['color'].withOpacity(
-                                            0.8 * pulseValue,
-                                          )
-                                          : Colors.white.withOpacity(
-                                            0.1 * pulseValue,
-                                          ),
+                                  color: isSelected
+                                      ? package['color'].withOpacity(
+                                          0.8 * pulseValue,
+                                        )
+                                      : Colors.white.withOpacity(
+                                          0.1 * pulseValue,
+                                        ),
                                   width: isSelected ? 2.0 : 1.0,
                                 ),
                                 boxShadow: [
@@ -314,9 +313,9 @@ class _TokenPurchaseScreenState extends State<TokenPurchaseScreen>
                                               Container(
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 2,
-                                                    ),
+                                                  horizontal: 8,
+                                                  vertical: 2,
+                                                ),
                                                 decoration: BoxDecoration(
                                                   color: package['color']
                                                       .withOpacity(0.3),
@@ -353,8 +352,8 @@ class _TokenPurchaseScreenState extends State<TokenPurchaseScreen>
                                               Shadow(
                                                 color: package['color']
                                                     .withOpacity(
-                                                      0.7 * pulseValue,
-                                                    ),
+                                                  0.7 * pulseValue,
+                                                ),
                                                 blurRadius: 5,
                                               ),
                                             ],
@@ -395,44 +394,41 @@ class _TokenPurchaseScreenState extends State<TokenPurchaseScreen>
                 SizedBox(
                   height: 56,
                   child: ElevatedButton(
-                    onPressed:
-                        _selectedPackage != null && !_isProcessing
-                            ? () => _purchaseTokens(
+                    onPressed: _selectedPackage != null && !_isProcessing
+                        ? () => _purchaseTokens(
                               _tokenPackages[_selectedPackage!]['tokens'],
                               _tokenPackages[_selectedPackage!]['price']
                                   .toDouble(),
                             )
-                            : null,
+                        : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          _selectedPackage != null
-                              ? _tokenPackages[_selectedPackage!]['color']
-                              : Colors.grey,
+                      backgroundColor: _selectedPackage != null
+                          ? _tokenPackages[_selectedPackage!]['color']
+                          : Colors.grey,
                       disabledBackgroundColor: Colors.grey.shade800,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child:
-                        _isProcessing
-                            ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                            : Text(
-                              _selectedPackage != null
-                                  ? 'BUY ${_tokenPackages[_selectedPackage!]['tokens']} TOKENS FOR R${_tokenPackages[_selectedPackage!]['price']}'
-                                  : 'SELECT A PACKAGE',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                    child: _isProcessing
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
                             ),
+                          )
+                        : Text(
+                            _selectedPackage != null
+                                ? 'BUY ${_tokenPackages[_selectedPackage!]['tokens']} TOKENS FOR R${_tokenPackages[_selectedPackage!]['price']}'
+                                : 'SELECT A PACKAGE',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
 

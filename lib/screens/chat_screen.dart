@@ -1064,7 +1064,7 @@ class _ChatScreenState extends State<ChatScreen> {
             });
 
             debugPrint(
-                'SUCCESS: Direct message participant resolved: ${otherUser!.name} for room: ${chatRoom.name}');
+                'SUCCESS: Direct message participant resolved: ${otherUser.name} for room: ${chatRoom.name}');
             return; // Successfully loaded, exit early
           }
         }

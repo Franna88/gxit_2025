@@ -261,7 +261,7 @@ class LocationService {
     // Round to 2 decimal places to create areas roughly 1.1km x 1.1km
     final lat = (latitude * 100).round() / 100;
     final lng = (longitude * 100).round() / 100;
-    return "Area_${lat}_${lng}";
+    return "Area_${lat}_$lng";
   }
 
   // Get nearby area chat rooms from Firestore
@@ -407,7 +407,7 @@ class LocationService {
       // Log each room found
       for (int i = 0; i < regularRoomsSnapshot.docs.length; i++) {
         final doc = regularRoomsSnapshot.docs[i];
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         debugPrint(
             'Room $i: ID=${doc.id}, name=${data['name']}, isDirectMessage=${data['isDirectMessage']}, memberIds=${data['memberIds']}');
       }

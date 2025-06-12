@@ -11,210 +11,221 @@ class PopupChatSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final popupChatService = PopupChatService();
-    
+
     // Initialize the service when widget is built
     // Use a future builder to handle initialization
     return FutureBuilder(
-      future: popupChatService.initialize(),
-      builder: (context, snapshot) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.15),
-            border: Border(
-              top: BorderSide(
-                color: AppColors.primaryBlue.withOpacity(0.3),
-                width: 1,
-              ),
-              bottom: BorderSide(
-                color: AppColors.primaryBlue.withOpacity(0.3),
-                width: 1,
+        future: popupChatService.initialize(),
+        builder: (context, snapshot) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.15),
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.primaryBlue.withOpacity(0.3),
+                  width: 1,
+                ),
+                bottom: BorderSide(
+                  color: AppColors.primaryBlue.withOpacity(0.3),
+                  width: 1,
+                ),
               ),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Section header with glowing text
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryBlue.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.forum_rounded,
-                            color: Colors.white70,
-                            size: 14,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'DAILY DISCUSSION TOPICS',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.7,
-                            shadows: [
-                              Shadow(
-                                color: AppColors.primaryBlue.withOpacity(0.7),
-                                blurRadius: 10,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryPurple.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppColors.primaryBlue.withOpacity(0.5),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: const [
-                          Icon(
-                            Icons.shuffle_rounded,
-                            color: Colors.white70,
-                            size: 10,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'RANDOM DAILY',
-                            style: TextStyle(
-                              fontSize: 9,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Section header with glowing text
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryBlue.withOpacity(0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.forum_rounded,
                               color: Colors.white70,
+                              size: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'DAILY DISCUSSION TOPICS',
+                            style: TextStyle(
+                              fontSize: 13,
                               fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.7,
+                              shadows: [
+                                Shadow(
+                                  color: AppColors.primaryBlue.withOpacity(0.7),
+                                  blurRadius: 10,
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Stream of scheduled popup chats
-              SizedBox(
-                height: 190,
-                child: snapshot.connectionState == ConnectionState.waiting
-                    ? const Center(child: CircularProgressIndicator())
-                    : StreamBuilder<List<PopupChatRoom>>(
-                        stream: popupChatService.getScheduledPopupChatRoomsStream(),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
-
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Error loading topics',
-                                    style: TextStyle(color: Colors.red[300]),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      // Force refresh by creating a new instance of the service
-                                      popupChatService.checkAndCreateDailyRoom();
-                                      // This will reset the widget and try again
-                                      (context as Element).markNeedsBuild();
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primaryBlue,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                    ),
-                                    child: const Text('Retry'),
-                                  ),
-                                ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryPurple.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.primaryBlue.withOpacity(0.5),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(
+                              Icons.shuffle_rounded,
+                              color: Colors.white70,
+                              size: 10,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'RANDOM DAILY',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.white70,
+                                fontWeight: FontWeight.bold,
                               ),
-                            );
-                          }
-
-                          final rooms = snapshot.data ?? [];
-                          if (rooms.isEmpty) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.timer_outlined,
-                                    color: Colors.grey[400],
-                                    size: 36,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'No upcoming discussion topics yet',
-                                    style: TextStyle(color: Colors.grey[400]),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Check back soon!',
-                                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ElevatedButton(
-                                    onPressed: () async {
-                                      // Try to create a daily topic
-                                      final created = await popupChatService.checkAndCreateDailyRoom();
-                                      if (created && context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('New discussion topic created!'),
-                                            backgroundColor: Colors.green,
-                                          ),
-                                        );
-                                        // Refresh the widget
-                                        (context as Element).markNeedsBuild();
-                                      }
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primaryBlue,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                    ),
-                                    child: const Text('Generate Topic'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-
-                          return ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            padding: const EdgeInsets.only(left: 12, right: 12, bottom: 4),
-                            itemCount: rooms.length,
-                            itemBuilder: (context, index) {
-                              final room = rooms[index];
-                              return _buildPopupChatCard(context, room);
-                            },
-                          );
-                        },
+                            ),
+                          ],
+                        ),
                       ),
-              ),
-            ],
-          ),
-        );
-      }
-    );
+                    ],
+                  ),
+                ),
+
+                // Stream of scheduled popup chats
+                SizedBox(
+                  height: 190,
+                  child: snapshot.connectionState == ConnectionState.waiting
+                      ? const Center(child: CircularProgressIndicator())
+                      : StreamBuilder<List<PopupChatRoom>>(
+                          stream: popupChatService
+                              .getScheduledPopupChatRoomsStream(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                  child: CircularProgressIndicator());
+                            }
+
+                            if (snapshot.hasError) {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      'Error loading topics',
+                                      style: TextStyle(color: Colors.red[300]),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        // Force refresh by creating a new instance of the service
+                                        popupChatService
+                                            .checkAndCreateDailyRoom();
+                                        // This will reset the widget and try again
+                                        (context as Element).markNeedsBuild();
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primaryBlue,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 8),
+                                      ),
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            final rooms = snapshot.data ?? [];
+                            if (rooms.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.timer_outlined,
+                                      color: Colors.grey[400],
+                                      size: 36,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'No upcoming discussion topics yet',
+                                      style: TextStyle(color: Colors.grey[400]),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Check back soon!',
+                                      style: TextStyle(
+                                          color: Colors.grey[500],
+                                          fontSize: 12),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ElevatedButton(
+                                      onPressed: () async {
+                                        // Try to create a daily topic
+                                        final created = await popupChatService
+                                            .checkAndCreateDailyRoom();
+                                        if (created && context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                  'New discussion topic created!'),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                          // Refresh the widget
+                                          (context as Element).markNeedsBuild();
+                                        }
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primaryBlue,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 8),
+                                      ),
+                                      child: const Text('Generate Topic'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            return ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              padding: const EdgeInsets.only(
+                                  left: 12, right: 12, bottom: 4),
+                              itemCount: rooms.length,
+                              itemBuilder: (context, index) {
+                                final room = rooms[index];
+                                return _buildPopupChatCard(context, room);
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          );
+        });
   }
 
   Widget _buildPopupChatCard(BuildContext context, PopupChatRoom room) {
@@ -260,7 +271,7 @@ class PopupChatSection extends StatelessWidget {
                 color: _getCategoryColor(room.category),
               ),
             ),
-            
+
             // Category badge
             Positioned(
               top: 8,
@@ -359,8 +370,7 @@ class PopupChatSection extends StatelessWidget {
 
   Widget _buildActionButton(BuildContext context, PopupChatRoom room) {
     final now = DateTime.now();
-    final openWaitingRoomTime =
-        room.openWaitingRoomTime ??
+    final openWaitingRoomTime = room.openWaitingRoomTime ??
         room.scheduledTime.subtract(
           const Duration(minutes: PopupChatRoom.waitingRoomDurationMinutes),
         );
@@ -393,8 +403,8 @@ class PopupChatSection extends StatelessWidget {
             _navigateToWaitingRoom(context, room.id);
           },
           style: buttonStyle.copyWith(
-            backgroundColor: MaterialStateProperty.all(AppColors.primaryBlue),
-            foregroundColor: MaterialStateProperty.all(Colors.white),
+            backgroundColor: WidgetStateProperty.all(AppColors.primaryBlue),
+            foregroundColor: WidgetStateProperty.all(Colors.white),
           ),
           child: Text(
             'JOIN WAITING ROOM',
@@ -412,8 +422,8 @@ class PopupChatSection extends StatelessWidget {
     return ElevatedButton(
       onPressed: null, // Disabled
       style: buttonStyle.copyWith(
-        backgroundColor: MaterialStateProperty.all(Colors.grey[800]),
-        foregroundColor: MaterialStateProperty.all(Colors.grey[400]),
+        backgroundColor: WidgetStateProperty.all(Colors.grey[800]),
+        foregroundColor: WidgetStateProperty.all(Colors.grey[400]),
       ),
       child: Text(timeText, style: textStyle),
     );
@@ -435,11 +445,11 @@ class PopupChatSection extends StatelessWidget {
         return Colors.blueGrey;
     }
   }
-  
+
   // Helper method to safely navigate and ensure back button works
   void _navigateToWaitingRoom(BuildContext context, String roomId) {
     final popupChatService = PopupChatService();
-    
+
     // First join the waiting room
     popupChatService.joinWaitingRoom(roomId).then((success) {
       if (success) {

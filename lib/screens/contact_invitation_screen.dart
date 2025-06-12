@@ -16,7 +16,7 @@ class _ContactInvitationScreenState extends State<ContactInvitationScreen> {
   List<Contact>? _contacts;
   bool _isLoading = true;
   String _searchQuery = '';
-  List<Contact> _selectedContacts = [];
+  final List<Contact> _selectedContacts = [];
 
   @override
   void initState() {
@@ -140,55 +140,52 @@ class _ContactInvitationScreenState extends State<ContactInvitationScreen> {
               ),
             ),
             Expanded(
-              child:
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _contacts == null || _contacts!.isEmpty
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _contacts == null || _contacts!.isEmpty
                       ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.contact_phone,
-                              size: 64,
-                              color: Colors.grey,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No contacts found',
-                              style: TextStyle(
-                                color:
-                                    isDarkMode
-                                        ? Colors.grey
-                                        : Colors.grey.shade700,
-                                fontSize: 16,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.contact_phone,
+                                size: 64,
+                                color: Colors.grey,
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: _loadContacts,
-                              child: const Text('Refresh'),
-                            ),
-                          ],
-                        ),
-                      )
+                              const SizedBox(height: 16),
+                              Text(
+                                'No contacts found',
+                                style: TextStyle(
+                                  color: isDarkMode
+                                      ? Colors.grey
+                                      : Colors.grey.shade700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              ElevatedButton(
+                                onPressed: _loadContacts,
+                                child: const Text('Refresh'),
+                              ),
+                            ],
+                          ),
+                        )
                       : ListView.builder(
-                        itemCount: filteredContacts.length,
-                        itemBuilder: (context, index) {
-                          final contact = filteredContacts[index];
-                          final isSelected = _selectedContacts.contains(
-                            contact,
-                          );
+                          itemCount: filteredContacts.length,
+                          itemBuilder: (context, index) {
+                            final contact = filteredContacts[index];
+                            final isSelected = _selectedContacts.contains(
+                              contact,
+                            );
 
-                          return ListTile(
-                            leading:
-                                contact.photo != null
-                                    ? CircleAvatar(
+                            return ListTile(
+                              leading: contact.photo != null
+                                  ? CircleAvatar(
                                       backgroundImage: MemoryImage(
                                         contact.photo!,
                                       ),
                                     )
-                                    : CircleAvatar(
+                                  : CircleAvatar(
                                       backgroundColor: AppColors.primaryBlue,
                                       child: Text(
                                         contact.displayName.isNotEmpty
@@ -200,21 +197,20 @@ class _ContactInvitationScreenState extends State<ContactInvitationScreen> {
                                         ),
                                       ),
                                     ),
-                            title: Text(contact.displayName),
-                            subtitle:
-                                contact.phones.isNotEmpty
-                                    ? Text(contact.phones.first.number)
-                                    : const Text('No phone number'),
-                            trailing: Checkbox(
-                              value: isSelected,
-                              onChanged:
-                                  (_) => _toggleContactSelection(contact),
-                              activeColor: AppColors.primaryBlue,
-                            ),
-                            onTap: () => _toggleContactSelection(contact),
-                          );
-                        },
-                      ),
+                              title: Text(contact.displayName),
+                              subtitle: contact.phones.isNotEmpty
+                                  ? Text(contact.phones.first.number)
+                                  : const Text('No phone number'),
+                              trailing: Checkbox(
+                                value: isSelected,
+                                onChanged: (_) =>
+                                    _toggleContactSelection(contact),
+                                activeColor: AppColors.primaryBlue,
+                              ),
+                              onTap: () => _toggleContactSelection(contact),
+                            );
+                          },
+                        ),
             ),
             if (_selectedContacts.isNotEmpty)
               Container(

@@ -8,11 +8,11 @@ class NotEnoughTokensDialog extends StatelessWidget {
   final VoidCallback? onBuyTokens;
 
   const NotEnoughTokensDialog({
-    Key? key,
+    super.key,
     required this.requiredTokens,
     required this.currentTokens,
     this.onBuyTokens,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -186,12 +186,11 @@ class NotEnoughTokensDialog extends StatelessWidget {
   }) {
     return showDialog(
       context: context,
-      builder:
-          (BuildContext context) => NotEnoughTokensDialog(
-            requiredTokens: requiredTokens,
-            currentTokens: currentTokens,
-            onBuyTokens: onBuyTokens,
-          ),
+      builder: (BuildContext context) => NotEnoughTokensDialog(
+        requiredTokens: requiredTokens,
+        currentTokens: currentTokens,
+        onBuyTokens: onBuyTokens,
+      ),
     );
   }
 }

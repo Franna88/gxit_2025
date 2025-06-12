@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
 import '../constants.dart';
 import '../services/user_service.dart';
@@ -153,22 +151,20 @@ class _SettingsScreenState extends State<SettingsScreen>
             color: Colors.black.withOpacity(0.5),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color:
-                  isDestructive
-                      ? Colors.red.withOpacity(0.4 * _pulseAnimation.value)
-                      : AppColors.primaryBlue.withOpacity(
-                        0.4 * _pulseAnimation.value,
-                      ),
+              color: isDestructive
+                  ? Colors.red.withOpacity(0.4 * _pulseAnimation.value)
+                  : AppColors.primaryBlue.withOpacity(
+                      0.4 * _pulseAnimation.value,
+                    ),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color:
-                    isDestructive
-                        ? Colors.red.withOpacity(0.1 * _pulseAnimation.value)
-                        : AppColors.primaryBlue.withOpacity(
-                          0.1 * _pulseAnimation.value,
-                        ),
+                color: isDestructive
+                    ? Colors.red.withOpacity(0.1 * _pulseAnimation.value)
+                    : AppColors.primaryBlue.withOpacity(
+                        0.1 * _pulseAnimation.value,
+                      ),
                 blurRadius: 8 * _pulseAnimation.value,
                 spreadRadius: 0,
               ),
@@ -192,14 +188,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                         color: Colors.black.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color:
-                              isDestructive
-                                  ? Colors.red.withOpacity(
-                                    0.3 * _pulseAnimation.value,
-                                  )
-                                  : AppColors.primaryBlue.withOpacity(
-                                    0.3 * _pulseAnimation.value,
-                                  ),
+                          color: isDestructive
+                              ? Colors.red.withOpacity(
+                                  0.3 * _pulseAnimation.value,
+                                )
+                              : AppColors.primaryBlue.withOpacity(
+                                  0.3 * _pulseAnimation.value,
+                                ),
                           width: 1,
                         ),
                       ),
@@ -224,10 +219,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                     Icon(
                       Icons.chevron_right,
-                      color:
-                          isDestructive
-                              ? Colors.red.withOpacity(0.7)
-                              : AppColors.subtleText,
+                      color: isDestructive
+                          ? Colors.red.withOpacity(0.7)
+                          : AppColors.subtleText,
                     ),
                   ],
                 ),
@@ -550,10 +544,9 @@ class Particle {
 class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = Colors.blue.withOpacity(0.1)
-          ..strokeWidth = 0.5;
+    final paint = Paint()
+      ..color = Colors.blue.withOpacity(0.1)
+      ..strokeWidth = 0.5;
 
     // Horizontal lines
     final horizontalCount = 15;

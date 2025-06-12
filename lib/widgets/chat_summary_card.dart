@@ -28,21 +28,19 @@ class ChatSummaryCard extends StatelessWidget {
         width: 140,
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
-          gradient:
-              isDarkMode && status == ContactStatus.online
-                  ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primaryBlue.withOpacity(0.1),
-                      AppColors.darkSecondaryBackground,
-                    ],
-                  )
-                  : null,
-          color:
-              isDarkMode
-                  ? AppColors.darkSecondaryBackground
-                  : AppColors.glassLight,
+          gradient: isDarkMode && status == ContactStatus.online
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryBlue.withOpacity(0.1),
+                    AppColors.darkSecondaryBackground,
+                  ],
+                )
+              : null,
+          color: isDarkMode
+              ? AppColors.darkSecondaryBackground
+              : AppColors.glassLight,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
@@ -93,10 +91,9 @@ class ChatSummaryCard extends StatelessWidget {
                           color: _getStatusColor(),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color:
-                                isDarkMode
-                                    ? AppColors.darkBackground
-                                    : Colors.white,
+                            color: isDarkMode
+                                ? AppColors.darkBackground
+                                : Colors.white,
                             width: 2,
                           ),
                           boxShadow: [
@@ -148,10 +145,9 @@ class ChatSummaryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color:
-                      isDarkMode
-                          ? AppColors.primaryBlue
-                          : AppColors.primaryPurple,
+                  color: isDarkMode
+                      ? AppColors.primaryBlue
+                      : AppColors.primaryPurple,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -173,13 +169,16 @@ class ChatSummaryCard extends StatelessWidget {
   Color _getAvatarColor() {
     // Social app usernames
     if (name == 'Alex' || name == 'Jessica') return AppColors.primaryBlue;
-    if (name == 'SocialBuzz' || name == 'PartyPeople')
+    if (name == 'SocialBuzz' || name == 'PartyPeople') {
       return AppColors.primaryOrange;
-    if (name == 'GamingCrew' || name == 'Michael')
+    }
+    if (name == 'GamingCrew' || name == 'Michael') {
       return AppColors.primaryGreen;
+    }
     if (name == 'TravelGroup' || name == 'Emma') return AppColors.primaryPurple;
-    if (name == 'FitnessFam' || name == 'Carlos')
+    if (name == 'FitnessFam' || name == 'Carlos') {
       return AppColors.primaryYellow;
+    }
     // Default color for other users
     return AppColors.primaryBlue;
   }

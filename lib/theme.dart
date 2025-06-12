@@ -12,7 +12,7 @@ class AppTheme {
         primary: AppColors.primaryBlue,
         secondary: AppColors.primaryPurple,
         tertiary: AppColors.primaryOrange,
-        background: AppColors.lightBackground,
+        surface: AppColors.lightBackground,
       ),
       textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -54,7 +54,6 @@ class AppTheme {
         primary: AppColors.primaryBlue,
         secondary: AppColors.primaryPurple,
         tertiary: AppColors.primaryOrange,
-        background: AppColors.darkBackground,
         surface: AppColors.darkSecondaryBackground,
         onSurface: AppColors.lightText,
       ),
@@ -62,9 +61,9 @@ class AppTheme {
       dividerColor: Colors.white10,
       textTheme: GoogleFonts.interTextTheme(
         ThemeData.dark().textTheme.apply(
-          bodyColor: AppColors.lightText,
-          displayColor: Colors.white,
-        ),
+              bodyColor: AppColors.lightText,
+              displayColor: Colors.white,
+            ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

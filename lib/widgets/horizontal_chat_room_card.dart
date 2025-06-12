@@ -11,7 +11,7 @@ class HorizontalChatRoomCard extends StatefulWidget {
   final VoidCallback onTap;
 
   const HorizontalChatRoomCard({
-    Key? key,
+    super.key,
     required this.name,
     required this.lastMessage,
     required this.lastActivity,
@@ -19,7 +19,7 @@ class HorizontalChatRoomCard extends StatefulWidget {
     this.hasUnreadMessages = false,
     this.unreadCount = 0,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   State<HorizontalChatRoomCard> createState() => _HorizontalChatRoomCardState();
@@ -149,10 +149,9 @@ class _HorizontalChatRoomCardState extends State<HorizontalChatRoomCard>
                         height: 12,
                         width: 12,
                         decoration: BoxDecoration(
-                          color:
-                              widget.hasUnreadMessages
-                                  ? AppColors.primaryGreen
-                                  : accentColor,
+                          color: widget.hasUnreadMessages
+                              ? AppColors.primaryGreen
+                              : accentColor,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(

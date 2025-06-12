@@ -9,9 +9,9 @@ class PrivateRoomsSection extends StatefulWidget {
   final Function(String roomId, String roomName) onRoomTap;
 
   const PrivateRoomsSection({
-    Key? key,
+    super.key,
     required this.onRoomTap,
-  }) : super(key: key);
+  });
 
   @override
   State<PrivateRoomsSection> createState() => _PrivateRoomsSectionState();
@@ -21,8 +21,8 @@ class _PrivateRoomsSectionState extends State<PrivateRoomsSection>
     with SingleTickerProviderStateMixin {
   final LocationService _locationService = LocationService();
   List<AreaChatRoom> _privateChatRooms = [];
-  Map<String, bool> _hasUnreadMessages = {};
-  Map<String, int> _unreadCounts = {};
+  final Map<String, bool> _hasUnreadMessages = {};
+  final Map<String, int> _unreadCounts = {};
   bool _isLoading = true;
 
   late AnimationController _pulseController;

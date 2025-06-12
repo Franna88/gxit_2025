@@ -287,25 +287,23 @@ class UserService {
 
     try {
       // Search by name
-      final nameQuerySnapshot =
-          await _firestore
-              .collection('users')
-              .where('name', isGreaterThanOrEqualTo: query)
-              .where(
-                'name',
-                isLessThanOrEqualTo: query + '\uf8ff',
-              ) // Unicode trick for prefix search
-              .limit(10)
-              .get();
+      final nameQuerySnapshot = await _firestore
+          .collection('users')
+          .where('name', isGreaterThanOrEqualTo: query)
+          .where(
+            'name',
+            isLessThanOrEqualTo: '$query\uf8ff',
+          ) // Unicode trick for prefix search
+          .limit(10)
+          .get();
 
       // Search by email
-      final emailQuerySnapshot =
-          await _firestore
-              .collection('users')
-              .where('email', isGreaterThanOrEqualTo: query)
-              .where('email', isLessThanOrEqualTo: query + '\uf8ff')
-              .limit(10)
-              .get();
+      final emailQuerySnapshot = await _firestore
+          .collection('users')
+          .where('email', isGreaterThanOrEqualTo: query)
+          .where('email', isLessThanOrEqualTo: '$query\uf8ff')
+          .limit(10)
+          .get();
 
       // Combine results
       final List<UserModel> users = [];
@@ -352,10 +350,10 @@ class UserService {
   Future<UserModel?> getCurrentUser() async {
     final user = _auth.currentUser;
     if (user == null) return null;
-    
+
     final doc = await _firestore.collection('users').doc(user.uid).get();
     if (!doc.exists) return null;
-    
+
     return UserModel.fromFirestore(doc);
   }
 
@@ -365,7 +363,7 @@ class UserService {
     // For now, we'll just return a placeholder value
     // You would typically use a system that tracks user activity timestamps
     // or uses a real-time presence system like Firebase Realtime Database
-    
+
     // For demonstration purposes only
     return userId.isNotEmpty; // Consider all valid users as online
   }
@@ -394,7 +392,7 @@ class UserService {
         final searchLower = searchQuery.toLowerCase();
         query = query
             .where('name', isGreaterThanOrEqualTo: searchLower)
-            .where('name', isLessThanOrEqualTo: searchLower + '\uf8ff');
+            .where('name', isLessThanOrEqualTo: '$searchLower\uf8ff');
         print('  Added search filter for: $searchLower');
       } else {
         // Only add ordering if not searching to avoid index issues
@@ -420,7 +418,8 @@ class UserService {
           .map((doc) {
             try {
               final user = UserModel.fromFirestore(doc);
-              print('  Parsed user: ${user.id} - ${user.name} (isSystemBot: ${user.isSystemBot})');
+              print(
+                  '  Parsed user: ${user.id} - ${user.name} (isSystemBot: ${user.isSystemBot})');
               return user;
             } catch (e) {
               print('  Error parsing user ${doc.id}: $e');
@@ -439,7 +438,8 @@ class UserService {
       // Exclude system bots if requested
       if (excludeSystemBots) {
         final beforeCount = filteredUsers.length;
-        filteredUsers = filteredUsers.where((user) => !user.isSystemBot).toList();
+        filteredUsers =
+            filteredUsers.where((user) => !user.isSystemBot).toList();
         final afterCount = filteredUsers.length;
         print('  Excluded system bots: $beforeCount -> $afterCount users');
       }
@@ -447,7 +447,8 @@ class UserService {
       // Exclude current user if requested
       if (excludeCurrentUser && currentUserId != null) {
         final beforeCount = filteredUsers.length;
-        filteredUsers = filteredUsers.where((user) => user.id != currentUserId).toList();
+        filteredUsers =
+            filteredUsers.where((user) => user.id != currentUserId).toList();
         final afterCount = filteredUsers.length;
         print('  Excluded current user: $beforeCount -> $afterCount users');
       }
@@ -491,7 +492,7 @@ class UserService {
         final searchLower = searchQuery.toLowerCase();
         query = query
             .where('name', isGreaterThanOrEqualTo: searchLower)
-            .where('name', isLessThanOrEqualTo: searchLower + '\uf8ff');
+            .where('name', isLessThanOrEqualTo: '$searchLower\uf8ff');
       }
 
       // Order by creation date (newest first)
@@ -501,9 +502,8 @@ class UserService {
       query = query.limit(limit);
 
       return query.snapshots().map((snapshot) {
-        final users = snapshot.docs
-            .map((doc) => UserModel.fromFirestore(doc))
-            .toList();
+        final users =
+            snapshot.docs.map((doc) => UserModel.fromFirestore(doc)).toList();
 
         // Exclude current user if requested
         if (excludeCurrentUser && currentUserId != null) {
@@ -525,23 +525,23 @@ class UserService {
 
       // Get total users (excluding system bots) - use simpler query
       print('  Querying total users...');
-      final totalUsersQuery = await _firestore
-          .collection('users')
-          .get();
-      
+      final totalUsersQuery = await _firestore.collection('users').get();
+
       // Filter out system bots manually
       final totalUsers = totalUsersQuery.docs.where((doc) {
         final data = doc.data() as Map<String, dynamic>?;
         return data != null && (data['isSystemBot'] ?? false) == false;
       }).toList();
-      
-      print('  Total users query returned: ${totalUsers.length} documents (after filtering)');
+
+      print(
+          '  Total users query returned: ${totalUsers.length} documents (after filtering)');
 
       // Calculate today and week counts manually
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);
       final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-      final startOfWeekDay = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+      final startOfWeekDay =
+          DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
 
       int todayCount = 0;
       int weekCount = 0;

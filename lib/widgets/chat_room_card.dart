@@ -11,7 +11,7 @@ class ChatRoomCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const ChatRoomCard({
-    Key? key,
+    super.key,
     required this.name,
     required this.lastMessage,
     required this.lastActivity,
@@ -19,7 +19,7 @@ class ChatRoomCard extends StatelessWidget {
     this.hasUnreadMessages = false,
     this.unreadCount = 0,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -49,10 +49,9 @@ class ChatRoomCard extends StatelessWidget {
                 height: 50,
                 width: 50,
                 decoration: BoxDecoration(
-                  color:
-                      hasUnreadMessages
-                          ? AppColors.primaryGreen
-                          : AppColors.primaryBlue,
+                  color: hasUnreadMessages
+                      ? AppColors.primaryGreen
+                      : AppColors.primaryBlue,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -80,14 +79,12 @@ class ChatRoomCard extends StatelessWidget {
                             name,
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight:
-                                  hasUnreadMessages
-                                      ? FontWeight.bold
-                                      : FontWeight.w500,
-                              color:
-                                  isDarkMode
-                                      ? Colors.white
-                                      : AppColors.darkText,
+                              fontWeight: hasUnreadMessages
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
+                              color: isDarkMode
+                                  ? Colors.white
+                                  : AppColors.darkText,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -97,10 +94,9 @@ class ChatRoomCard extends StatelessWidget {
                           _getTimeText(lastActivity),
                           style: TextStyle(
                             fontSize: 12,
-                            color:
-                                isDarkMode
-                                    ? AppColors.subtleText
-                                    : Colors.grey.shade600,
+                            color: isDarkMode
+                                ? AppColors.subtleText
+                                : Colors.grey.shade600,
                           ),
                         ),
                       ],
@@ -110,14 +106,12 @@ class ChatRoomCard extends StatelessWidget {
                       lastMessage,
                       style: TextStyle(
                         fontSize: 14,
-                        color:
-                            isDarkMode
-                                ? Colors.grey.shade300
-                                : Colors.grey.shade700,
-                        fontWeight:
-                            hasUnreadMessages
-                                ? FontWeight.w500
-                                : FontWeight.normal,
+                        color: isDarkMode
+                            ? Colors.grey.shade300
+                            : Colors.grey.shade700,
+                        fontWeight: hasUnreadMessages
+                            ? FontWeight.w500
+                            : FontWeight.normal,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -128,20 +122,18 @@ class ChatRoomCard extends StatelessWidget {
                         Icon(
                           Icons.people,
                           size: 16,
-                          color:
-                              isDarkMode
-                                  ? AppColors.subtleText
-                                  : Colors.grey.shade600,
+                          color: isDarkMode
+                              ? AppColors.subtleText
+                              : Colors.grey.shade600,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '$memberCount members',
                           style: TextStyle(
                             fontSize: 12,
-                            color:
-                                isDarkMode
-                                    ? AppColors.subtleText
-                                    : Colors.grey.shade600,
+                            color: isDarkMode
+                                ? AppColors.subtleText
+                                : Colors.grey.shade600,
                           ),
                         ),
                       ],

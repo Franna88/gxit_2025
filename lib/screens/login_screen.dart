@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants.dart';
 import '../services/user_service.dart';
 import 'home_screen.dart';
@@ -380,21 +379,20 @@ class _LoginScreenState extends State<LoginScreen>
                               return Transform.translate(
                                 offset: Offset(0, _floatAnimation.value),
                                 child: Transform(
-                                  transform:
-                                      Matrix4.identity()
-                                        ..setEntry(
-                                          3,
-                                          2,
-                                          0.001,
-                                        ) // Perspective effect
-                                        ..rotateX(_rotationX)
-                                        ..rotateY(_rotationY)
-                                        ..rotateZ(
-                                          _rotateController.value *
-                                              2 *
-                                              math.pi *
-                                              0.05,
-                                        ),
+                                  transform: Matrix4.identity()
+                                    ..setEntry(
+                                      3,
+                                      2,
+                                      0.001,
+                                    ) // Perspective effect
+                                    ..rotateX(_rotationX)
+                                    ..rotateY(_rotationY)
+                                    ..rotateZ(
+                                      _rotateController.value *
+                                          2 *
+                                          math.pi *
+                                          0.05,
+                                    ),
                                   alignment: Alignment.center,
                                   child: Transform.scale(
                                     scale: _pulseAnimation.value,
@@ -592,47 +590,44 @@ class _LoginScreenState extends State<LoginScreen>
               ),
               child: Ink(
                 decoration: BoxDecoration(
-                  gradient:
-                      _isLoading
-                          ? null
-                          : LinearGradient(
-                            colors: [
-                              AppColors.primaryBlue.withOpacity(0.8),
-                              AppColors.primaryPurple.withOpacity(0.8),
-                            ],
-                          ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow:
-                      _isLoading
-                          ? null
-                          : [
-                            BoxShadow(
-                              color: AppColors.primaryBlue.withOpacity(0.4),
-                              blurRadius: 8,
-                              spreadRadius: 0,
-                            ),
+                  gradient: _isLoading
+                      ? null
+                      : LinearGradient(
+                          colors: [
+                            AppColors.primaryBlue.withOpacity(0.8),
+                            AppColors.primaryPurple.withOpacity(0.8),
                           ],
+                        ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: _isLoading
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: AppColors.primaryBlue.withOpacity(0.4),
+                            blurRadius: 8,
+                            spreadRadius: 0,
+                          ),
+                        ],
                 ),
                 child: Container(
                   alignment: Alignment.center,
-                  child:
-                      _isLoading
-                          ? SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              color: AppColors.primaryBlue,
-                              strokeWidth: 3,
-                            ),
-                          )
-                          : const Text(
-                            'CONNECT',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                            ),
+                  child: _isLoading
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: AppColors.primaryBlue,
+                            strokeWidth: 3,
                           ),
+                        )
+                      : const Text(
+                          'CONNECT',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -702,23 +697,20 @@ class _LoginScreenState extends State<LoginScreen>
             fontWeight: FontWeight.w500,
           ),
           prefixIcon: Icon(prefixIcon, color: AppColors.subtleText, size: 20),
-          suffixIcon:
-              isPassword
-                  ? IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                      color: AppColors.subtleText,
-                      size: 20,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  )
-                  : null,
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    color: AppColors.subtleText,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                )
+              : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
@@ -772,10 +764,9 @@ class Particle {
 class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = Colors.blue.withOpacity(0.1)
-          ..strokeWidth = 0.5;
+    final paint = Paint()
+      ..color = Colors.blue.withOpacity(0.1)
+      ..strokeWidth = 0.5;
 
     // Horizontal lines
     final horizontalCount = 15;
